@@ -106,14 +106,14 @@ export default function HomeDashboard({ onNavigate }) {
   return (
     <div className="space-y-6 pb-20">
       {/* Top Banner with Ribbon / Bow Badge */}
-      <div className="relative overflow-hidden glass-card rounded-4xl p-6 kawaii-shadow border border-primary-container/60 bg-gradient-to-br from-primary-container/40 via-surface to-secondary-container/30">
+      <div className="relative overflow-hidden glass-card rounded-3xl sm:rounded-4xl p-4 sm:p-6 kawaii-shadow border border-primary-container/60 bg-gradient-to-br from-primary-container/40 via-surface to-secondary-container/30">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/80 text-secondary text-xs font-bold mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/80 text-secondary text-xs font-bold mb-2.5">
               <span className="material-symbols-outlined text-sm">spa</span>
               {predictions.currentPhase} Phase
             </div>
-            <h2 className="text-3xl font-extrabold font-headline text-primary">
+            <h2 className="text-2xl sm:text-3xl font-extrabold font-headline text-primary tracking-tight">
               {predictions.daysUntilNextPeriod === 0
                 ? 'Period Starting Today'
                 : `Next Period in ${predictions.daysUntilNextPeriod} Days`}
@@ -126,7 +126,7 @@ export default function HomeDashboard({ onNavigate }) {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowModal(true)}
-              className="px-5 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-on-primary font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2"
+              className="w-full sm:w-auto justify-center px-5 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-on-primary font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2"
             >
               <span className="material-symbols-outlined text-lg">water_drop</span>
               + Log Period Start Date
@@ -266,8 +266,8 @@ export default function HomeDashboard({ onNavigate }) {
 
       {/* Modal to Log Period Start & Info */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card bg-surface-bright rounded-4xl p-6 w-full max-w-md border border-primary-container shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="glass-card bg-surface-bright rounded-3xl sm:rounded-4xl p-5 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto border border-primary-container shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-primary-container/30 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary">
