@@ -38,7 +38,7 @@ export default function App() {
       <AnimatedBowsBackground />
       <div className="relative z-10">
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
-        <main className="max-w-4xl mx-auto px-4 pt-6">
+        <main className="max-w-4xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 pb-28 sm:pb-12">
           {renderScreen()}
         </main>
       </div>
