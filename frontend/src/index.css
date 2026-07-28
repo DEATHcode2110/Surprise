@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #fbf9f5;
+    color: #1b1c1a;
+    font-family: 'Quicksand', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+  }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(3deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.03); opacity: 0.92; }
+}
+
+@keyframes floatBow {
+  0% {
+    transform: translateY(0px) rotate(-5deg) scale(1);
+  }
+  50% {
+    transform: translateY(-16px) rotate(8deg) scale(1.06);
+  }
+  100% {
+    transform: translateY(0px) rotate(-5deg) scale(1);
+  }
+}
+
+@keyframes flutterButterfly {
+  0% {
+    transform: translateY(0px) translateX(0px) rotate(-10deg) scale(0.95);
+  }
+  33% {
+    transform: translateY(-12px) translateX(8px) rotate(12deg) scale(1.08);
+  }
+  66% {
+    transform: translateY(-22px) translateX(-5px) rotate(-8deg) scale(0.98);
+  }
+  100% {
+    transform: translateY(0px) translateX(0px) rotate(-10deg) scale(0.95);
+  }
+}
+
+@keyframes swayTeddy {
+  0% {
+    transform: translateY(0px) rotate(-6deg) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) rotate(6deg) scale(1.04);
+  }
+  100% {
+    transform: translateY(0px) rotate(-6deg) scale(1);
+  }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 3s ease-in-out infinite;
+}
+
+.glass-card {
+  background: rgba(255, 253, 249, 0.92);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(248, 200, 220, 0.5);
+}
+
+.kawaii-shadow {
+  box-shadow: 0 10px 25px -5px rgba(248, 200, 220, 0.4), 0 8px 10px -6px rgba(211, 196, 227, 0.25);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
