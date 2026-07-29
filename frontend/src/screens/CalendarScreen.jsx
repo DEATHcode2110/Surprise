@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import api from '../api/client';
+import { useTracker } from '../context/TrackerContext';
 
 export default function CalendarScreen({ onSelectDate }) {
-  const [currentMonth, setCurrentMonth] = useState('2026-07');
+  const { getCalendarMonth } = useTracker();
+  const [currentMonth, setCurrentMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [calendarData, setCalendarData] = useState(null);
   const [selectedDay, setSelectedDay] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const loadCalendar = async (monthStr) => {
     try {
-      setLoading(true);
-      const res = await api.getCalendar(monthStr);
+      if (!calendarData) setLoading(true);
+      const res = await getCalendarMonth(monthStr);
       setCalendarData(res);
     } catch (err) {
       console.error(err);
@@ -43,7 +44,7 @@ export default function CalendarScreen({ onSelectDate }) {
     return date.toLocaleString('default', { month: 'long', year: 'numeric' });
   };
 
-  if (loading) {
+  if (loading || !calendarData) {
     return (
       <div className="text-center py-16 text-xs text-outline font-semibold">
         Loading calendar view...
