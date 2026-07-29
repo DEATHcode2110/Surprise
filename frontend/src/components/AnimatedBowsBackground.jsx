@@ -231,7 +231,7 @@ export default function AnimatedBowsBackground() {
       {elements.map((item, idx) => (
         <div
           key={idx}
-          className="absolute transition-transform opacity-85 hover:opacity-100"
+          className="absolute gpu-accelerated transition-transform opacity-85 hover:opacity-100"
           style={{
             top: item.top,
             left: item.left,
