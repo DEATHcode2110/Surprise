@@ -1,320 +1,361 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import api from '../api/client';
+import { useTracker } from '../context/TrackerContext';
 
-const PRESET_SYMPTOMS = ['cramps', 'headache', 'bloating', 'breast tenderness', 'fatigue', 'acne'];
-const PRESET_MOODS = ['happy', 'irritable', 'anxious', 'low energy'];
+export default function HomeDashboard({ onNavigate }) {
+  const { insightsData, dueReminders, cycles, isInitialLoading, error, refreshAllData } = useTracker();
 
-export default function DailyLogScreen() {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [symptoms, setSymptoms] = useState([]);
-  const [moodTags, setMoodTags] = useState([]);
-  const [notes, setNotes] = useState('');
-
-  // Flow intensity / cycle form state
-  const [isPeriodDay, setIsPeriodDay] = useState(false);
+  // Period Start Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState('');
+  const [isOngoing, setIsOngoing] = useState(true);
   const [flowIntensity, setFlowIntensity] = useState('medium');
-
+  const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState(null);
-  const [recentLogs, setRecentLogs] = useState([]);
-  const [cycles, setCycles] = useState([]);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const loadData = async (date) => {
-    try {
-      const [logRes, logsRes, cyclesRes] = await Promise.all([
-        api.getDailyLogByDate(date),
-        api.getDailyLogs(),
-        api.getCycles()
-      ]);
-
-      if (logRes.log) {
-        setSymptoms(logRes.log.symptoms || []);
-        setMoodTags(logRes.log.mood_tags || []);
-        setNotes(logRes.log.notes || '');
-      } else {
-        setSymptoms([]);
-        setMoodTags([]);
-        setNotes('');
-      }
-
-      setRecentLogs(logsRes.logs || []);
-      setCycles(cyclesRes.cycles || []);
-
-      // Check if period flow is logged for selectedDate
-      const activeCycle = (cyclesRes.cycles || []).find(c => {
-        const flowMap = c.flow_intensity || {};
-        return flowMap[date] || (c.end_date && date >= c.start_date && date <= c.end_date);
-      });
-
-      if (activeCycle) {
-        setIsPeriodDay(true);
-        const flowMap = activeCycle.flow_intensity || {};
-        setFlowIntensity(flowMap[date] || 'medium');
-      } else {
-        setIsPeriodDay(false);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  useEffect(() => {
-    loadData(selectedDate);
-  }, [selectedDate]);
-
-  const toggleSymptom = (sym) => {
-    setSymptoms(prev =>
-      prev.includes(sym) ? prev.filter(s => s !== sym) : [...prev, sym]
-    );
-  };
-
-  const toggleMood = (mood) => {
-    setMoodTags(prev =>
-      prev.includes(mood) ? prev.filter(m => m !== mood) : [...prev, mood]
-    );
-  };
-
-  const handleSave = async (e) => {
+  const handleSavePeriodStart = async (e) => {
     e.preventDefault();
+    if (!startDate) return;
     try {
       setSaving(true);
-      setMessage(null);
 
-      // Save Daily Log
-      await api.saveDailyLog({
-        date: selectedDate,
-        symptoms,
-        mood_tags: moodTags,
-        notes
+      const flowObj = { [startDate]: flowIntensity };
+
+      await api.createCycle({
+        start_date: startDate,
+        end_date: isOngoing ? null : (endDate || null),
+        flow_intensity: flowObj,
+        notes: notes.trim()
       });
 
-      // Handle Period/Cycle Flow update
-      if (isPeriodDay) {
-        // Find existing cycle to attach or create new cycle
-        const matchingCycle = cycles.find(c => {
-          if (!c.end_date) return true; // Ongoing cycle
-          return selectedDate >= c.start_date && selectedDate <= c.end_date;
-        });
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        setShowModal(false);
+        setNotes('');
+      }, 1500);
 
-        if (matchingCycle) {
-          const updatedFlow = {
-            ...(matchingCycle.flow_intensity || {}),
-            [selectedDate]: flowIntensity
-          };
-          await api.updateCycle(matchingCycle.id, {
-            flow_intensity: updatedFlow
-          });
-        } else {
-          // Create new cycle starting on this date
-          await api.createCycle({
-            start_date: selectedDate,
-            flow_intensity: { [selectedDate]: flowIntensity },
-            notes: 'Created from Daily Log'
-          });
-        }
-      }
-
-      setMessage({ type: 'success', text: 'Daily log & symptoms saved successfully! ✨' });
-      await loadData(selectedDate);
+      await refreshAllData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      alert(err.message);
     } finally {
       setSaving(false);
     }
   };
 
+  const handleDeleteCycle = async (id) => {
+    if (!confirm('Are you sure you want to delete this period entry?')) return;
+    try {
+      await api.deleteCycle(id);
+      await refreshAllData();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  if (isInitialLoading && !insightsData) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <div className="w-12 h-12 rounded-full border-4 border-primary-container border-t-primary animate-spin"></div>
+        <p className="text-sm font-semibold text-outline">Loading your cycle status...</p>
+      </div>
+    );
+  }
+
+  if (error && !insightsData) {
+    return (
+      <div className="p-6 max-w-md mx-auto my-8 bg-error-container/20 border border-error/30 rounded-3xl text-center">
+        <span className="material-symbols-outlined text-4xl text-error mb-2">warning</span>
+        <p className="text-sm font-semibold text-error">Unable to load dashboard data</p>
+        <button onClick={refreshAllData} className="mt-4 px-4 py-2 bg-primary text-on-primary rounded-full text-xs font-bold">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const predictions = insightsData?.predictions || {
+    currentPhase: 'Follicular',
+    daysUntilNextPeriod: 28,
+    predictedNextStart: 'Calculating...',
+    confidenceLevel: 'Moderate',
+    confidenceScore: 75,
+    confidenceMessage: 'Building historical baseline...',
+    averageCycleLength: 28,
+    averagePeriodDuration: 5,
+    cycleCount: cycles.length
+  };
+  const cyclesList = cycles || [];
+
   return (
-    <div className="space-y-6 pb-20 max-w-2xl mx-auto">
-      <div className="glass-card rounded-4xl p-6 border border-primary-container/60 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6 pb-20">
+      {/* Top Banner with Ribbon / Bow Badge */}
+      <div className="relative overflow-hidden glass-card rounded-3xl sm:rounded-4xl p-4 sm:p-6 kawaii-shadow border border-primary-container/60 bg-gradient-to-br from-primary-container/40 via-surface to-secondary-container/30">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold font-headline text-primary">Daily Log</h2>
-            <p className="text-xs text-outline font-medium">Record how you are feeling today</p>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-container/80 text-secondary text-xs font-bold mb-2.5">
+              <span className="material-symbols-outlined text-sm">spa</span>
+              {predictions.currentPhase} Phase
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold font-headline text-primary tracking-tight">
+              {predictions.daysUntilNextPeriod === 0
+                ? 'Period Starting Today'
+                : `Next Period in ${predictions.daysUntilNextPeriod} Days`}
+            </h2>
+            <p className="text-xs text-outline font-medium mt-1">
+              Predicted start: <span className="font-bold text-on-surface">{predictions.predictedNextStart}</span>
+            </p>
           </div>
 
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-1.5 rounded-2xl bg-surface-container-low border border-primary-container/50 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowModal(true)}
+              className="w-full sm:w-auto justify-center px-5 py-3 rounded-2xl bg-primary hover:bg-primary/90 text-on-primary font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-lg">water_drop</span>
+              + Log Period Start Date
+            </button>
+          </div>
         </div>
 
-        {message && (
-          <div className={`p-3 rounded-2xl text-xs font-semibold mb-4 ${
-            message.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-          }`}>
-            {message.text}
+        {/* Prediction Accuracy Badge */}
+        <div className="mt-5 pt-4 border-t border-primary-container/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${
+              predictions.confidenceLevel === 'High' ? 'bg-emerald-500' : 'bg-amber-400'
+            }`}></span>
+            <span className="font-semibold text-on-surface">
+              {predictions.confidenceLevel} Accuracy ({predictions.confidenceScore}%)
+            </span>
+          </div>
+          <span className="text-[11px] text-outline italic">{predictions.confidenceMessage}</span>
+        </div>
+      </div>
+
+      {/* Quick Action Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Daily Log Quick Action */}
+        <div
+          onClick={() => onNavigate('log')}
+          className="glass-card rounded-3xl p-5 border border-primary-container/50 hover:border-primary transition-all cursor-pointer group hover:shadow-md"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-2xl bg-primary-container/70 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">edit_square</span>
+            </div>
+            <span className="material-symbols-outlined text-outline group-hover:text-primary group-hover:translate-x-1 transition-all">chevron_right</span>
+          </div>
+          <h3 className="font-bold font-headline text-lg text-on-surface">Log Symptoms & Mood</h3>
+          <p className="text-xs text-outline mt-1">Track cramps, headaches, flow, and daily mood tags</p>
+        </div>
+
+        {/* Calendar Quick Action */}
+        <div
+          onClick={() => onNavigate('calendar')}
+          className="glass-card rounded-3xl p-5 border border-secondary-container/60 hover:border-secondary transition-all cursor-pointer group hover:shadow-md"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-2xl bg-secondary-container/80 flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">calendar_today</span>
+            </div>
+            <span className="material-symbols-outlined text-outline group-hover:text-secondary group-hover:translate-x-1 transition-all">chevron_right</span>
+          </div>
+          <h3 className="font-bold font-headline text-lg text-on-surface">Cycle Calendar</h3>
+          <p className="text-xs text-outline mt-1">View color-coded period dates & predicted PMS window</p>
+        </div>
+      </div>
+
+      {/* Logged Period Entries List */}
+      <div className="glass-card rounded-3xl p-5 border border-primary-container/40">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-bold font-headline text-base text-primary flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">calendar_month</span>
+            Logged Period Dates & Info
+          </h3>
+          <button
+            onClick={() => setShowModal(true)}
+            className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            Add Entry
+          </button>
+        </div>
+
+        {cyclesList.length === 0 ? (
+          <div className="text-center py-6 border border-dashed border-primary-container/60 rounded-2xl">
+            <span className="material-symbols-outlined text-3xl text-outline mb-1">water_drop</span>
+            <p className="text-xs font-semibold text-outline">No period start dates logged yet.</p>
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-2 text-xs font-bold text-primary hover:underline"
+            >
+              + Add First Period Start Date
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {cyclesList.map(cycle => (
+              <div key={cycle.id} className="p-3.5 rounded-2xl bg-surface-container-low border border-primary-container/30 flex items-start justify-between">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-on-surface">Started: {cycle.start_date}</span>
+                    {cycle.end_date ? (
+                      <span className="text-[11px] text-outline font-medium">• Ended: {cycle.end_date}</span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800">Ongoing</span>
+                    )}
+                  </div>
+                  {cycle.notes && (
+                    <p className="text-xs text-outline italic">"{cycle.notes}"</p>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => handleDeleteCycle(cycle.id)}
+                  className="text-outline hover:text-error transition-colors p-1"
+                  title="Delete Entry"
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                </button>
+              </div>
+            ))}
           </div>
         )}
-
-        <form onSubmit={handleSave} className="space-y-6">
-          {/* Period Flow Intensity Section */}
-          <div className="p-4 rounded-3xl bg-surface-container-low border border-primary-container/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isPeriodDay}
-                  onChange={(e) => setIsPeriodDay(e.target.checked)}
-                  className="w-4 h-4 text-primary rounded accent-primary"
-                />
-                <span className="text-xs font-bold text-on-surface">Log Period Day / Flow</span>
-              </label>
-
-              {isPeriodDay && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-container text-primary font-bold">
-                  Period Active
-                </span>
-              )}
-            </div>
-
-            {isPeriodDay && (
-              <div className="pt-2 border-t border-primary-container/20">
-                <p className="text-xs font-semibold text-outline mb-2">Flow Intensity:</p>
-                <div className="flex gap-2">
-                  {['light', 'medium', 'heavy'].map(level => (
-                    <button
-                      type="button"
-                      key={level}
-                      onClick={() => setFlowIntensity(level)}
-                      className={`flex-1 py-1.5 rounded-2xl text-xs font-bold capitalize transition-all ${
-                        flowIntensity === level
-                          ? 'bg-primary text-on-primary shadow-sm'
-                          : 'bg-surface-bright text-outline hover:text-on-surface'
-                      }`}
-                    >
-                      {level}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Preset Symptoms (Multi-select) */}
-          <div>
-            <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">health_metrics</span>
-              Symptoms (Select all that apply)
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              {PRESET_SYMPTOMS.map(sym => {
-                const selected = symptoms.includes(sym);
-                return (
-                  <button
-                    type="button"
-                    key={sym}
-                    onClick={() => toggleSymptom(sym)}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold capitalize transition-all flex items-center gap-1.5 ${
-                      selected
-                        ? 'bg-primary-container text-primary border border-primary/40 shadow-sm scale-105'
-                        : 'bg-surface-container-low text-outline hover:text-on-surface border border-transparent'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {selected ? 'check_circle' : 'add_circle'}
-                    </span>
-                    {sym}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mood Tags (Multi-select) */}
-          <div>
-            <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">sentiment_satisfied</span>
-              Mood Tags
-            </label>
-
-            <div className="flex flex-wrap gap-2">
-              {PRESET_MOODS.map(mood => {
-                const selected = moodTags.includes(mood);
-                return (
-                  <button
-                    type="button"
-                    key={mood}
-                    onClick={() => toggleMood(mood)}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold capitalize transition-all flex items-center gap-1.5 ${
-                      selected
-                        ? 'bg-secondary-container text-secondary border border-secondary/40 shadow-sm scale-105'
-                        : 'bg-surface-container-low text-outline hover:text-on-surface border border-transparent'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {selected ? 'favorite' : 'mood'}
-                    </span>
-                    {mood}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Free-text Notes */}
-          <div>
-            <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">edit_note</span>
-              Free-text Notes
-            </label>
-
-            <textarea
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="How are you feeling today? Add any details or note for your partner..."
-              className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full py-3 bg-primary hover:bg-primary/90 text-on-primary rounded-2xl font-bold font-headline text-sm shadow-md transition-all flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-base">save</span>
-            {saving ? 'Saving Log...' : 'Save Daily Log'}
-          </button>
-        </form>
       </div>
 
-      {/* Recent Logs History */}
-      <div className="glass-card rounded-4xl p-6 border border-primary-container/40">
-        <h3 className="text-base font-bold font-headline text-primary mb-4 flex items-center gap-2">
-          <span className="material-symbols-outlined text-lg">history</span>
-          Recent Logged Days
+      {/* Key Cycle Stats Summary */}
+      <div className="glass-card rounded-3xl p-5 border border-primary-container/40">
+        <h3 className="font-bold font-headline text-base text-primary mb-4 flex items-center gap-2">
+          <span className="material-symbols-outlined text-lg">monitoring</span>
+          Historical Cycle Overview
         </h3>
 
-        <div className="space-y-3">
-          {recentLogs.slice(0, 5).map(log => (
-            <div
-              key={log.date}
-              onClick={() => setSelectedDate(log.date)}
-              className="p-3 rounded-2xl bg-surface-container-low border border-primary-container/20 cursor-pointer hover:border-primary transition-all flex items-center justify-between"
-            >
-              <div>
-                <p className="text-xs font-bold text-on-surface">{log.date}</p>
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {log.symptoms.map(s => (
-                    <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-primary-container/60 text-primary font-medium">
-                      {s}
-                    </span>
-                  ))}
-                  {log.mood_tags.map(m => (
-                    <span key={m} className="text-[10px] px-2 py-0.5 rounded-full bg-secondary-container text-secondary font-medium">
-                      {m}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <span className="material-symbols-outlined text-xs text-outline">arrow_forward_ios</span>
-            </div>
-          ))}
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-surface-container-low p-3 rounded-2xl">
+            <p className="text-2xl font-black font-headline text-primary">{predictions.averageCycleLength}</p>
+            <p className="text-[11px] font-semibold text-outline">Avg Length (Days)</p>
+          </div>
+
+          <div className="bg-surface-container-low p-3 rounded-2xl">
+            <p className="text-2xl font-black font-headline text-primary">{predictions.averagePeriodDuration}</p>
+            <p className="text-[11px] font-semibold text-outline">Avg Duration (Days)</p>
+          </div>
+
+          <div className="bg-surface-container-low p-3 rounded-2xl">
+            <p className="text-2xl font-black font-headline text-primary">{predictions.cycleCount}</p>
+            <p className="text-[11px] font-semibold text-outline">Cycles Logged</p>
+          </div>
         </div>
       </div>
+
+      {/* Modal to Log Period Start & Info */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="glass-card bg-surface-bright rounded-3xl sm:rounded-4xl p-5 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto border border-primary-container shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-primary-container/30 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined text-base">water_drop</span>
+                </div>
+                <h3 className="text-lg font-bold font-headline text-primary">Log Period Start & Info</h3>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-outline hover:text-on-surface">
+                <span className="material-symbols-outlined text-xl">close</span>
+              </button>
+            </div>
+
+            {saveSuccess ? (
+              <div className="py-8 text-center space-y-2">
+                <span className="material-symbols-outlined text-4xl text-emerald-500 animate-bounce">check_circle</span>
+                <p className="text-sm font-bold text-on-surface">Period Start Date Saved! 🌸✨</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSavePeriodStart} className="space-y-4">
+                {/* Start Date */}
+                <div>
+                  <label className="block text-xs font-bold text-primary mb-1">When did the period start?</label>
+                  <input
+                    type="date"
+                    required
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+
+                {/* Period Ongoing or End Date */}
+                <div className="p-3.5 rounded-2xl bg-surface-container-low border border-primary-container/30 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isOngoing}
+                      onChange={(e) => setIsOngoing(e.target.checked)}
+                      className="w-4 h-4 text-primary rounded accent-primary"
+                    />
+                    <span className="text-xs font-bold text-on-surface">Period is currently ongoing</span>
+                  </label>
+
+                  {!isOngoing && (
+                    <div className="pt-2">
+                      <label className="block text-[11px] font-semibold text-outline mb-1">Period End Date:</label>
+                      <input
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="w-full p-2.5 rounded-xl bg-surface-bright border border-primary-container/40 text-xs font-bold"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Flow Intensity */}
+                <div>
+                  <label className="block text-xs font-bold text-primary mb-1.5">Initial Flow Intensity</label>
+                  <div className="flex gap-2">
+                    {['light', 'medium', 'heavy'].map(level => (
+                      <button
+                        type="button"
+                        key={level}
+                        onClick={() => setFlowIntensity(level)}
+                        className={`flex-1 py-2 rounded-2xl text-xs font-bold capitalize transition-all ${
+                          flowIntensity === level
+                            ? 'bg-primary text-on-primary shadow-sm'
+                            : 'bg-surface-container-low text-outline hover:text-on-surface'
+                        }`}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Info / Notes */}
+                <div>
+                  <label className="block text-xs font-bold text-primary mb-1">A Little Info / Notes</label>
+                  <textarea
+                    rows={3}
+                    placeholder="e.g. Started in the morning, moderate cramps, drank warm ginger tea..."
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="w-full py-3 bg-primary hover:bg-primary/90 text-on-primary font-bold text-xs rounded-2xl shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-base">save</span>
+                  {saving ? 'Saving Entry...' : 'Save Period Entry'}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
