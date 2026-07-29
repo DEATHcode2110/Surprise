@@ -1,27 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import api from '../api/client';
+import React from 'react';
+import { useTracker } from '../context/TrackerContext';
 
 export default function InsightsScreen() {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { insightsData, isInitialLoading } = useTracker();
 
-  const loadInsights = async () => {
-    try {
-      setLoading(true);
-      const res = await api.getInsights();
-      setData(res);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadInsights();
-  }, []);
-
-  if (loading) {
+  if (isInitialLoading && !insightsData) {
     return (
       <div className="text-center py-16 text-xs text-outline font-semibold">
         Calculating historical cycle analytics...
@@ -29,7 +12,13 @@ export default function InsightsScreen() {
     );
   }
 
-  const { averages, cycleTrends, topSymptoms, topMoods } = data;
+  const { averages, cycleTrends, topSymptoms, topMoods } = insightsData || {
+    averages: { last3Months: 28, last6Months: 28, last12Months: 28 },
+    cycleTrends: [],
+    topSymptoms: [],
+    topMoods: []
+  };
+
   const maxSymptomCount = Math.max(...topSymptoms.map(s => s.count), 1);
 
   return (
