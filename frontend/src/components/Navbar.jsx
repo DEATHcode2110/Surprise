@@ -1,9 +1,6 @@
 import React from 'react';
-import { useTracker } from '../context/TrackerContext';
 
 export default function Navbar({ activeTab, setActiveTab }) {
-  const { lockApp } = useTracker();
-
   const tabs = [
     { id: 'home', label: 'Home', icon: 'home' },
     { id: 'log', label: 'Daily Log', icon: 'edit_note' },
@@ -31,38 +28,26 @@ export default function Navbar({ activeTab, setActiveTab }) {
           </div>
         </div>
 
-        {/* Navigation Ribbon for Desktop + Lock App Button */}
-        <div className="flex items-center gap-2">
-          <nav className="hidden sm:flex items-center gap-1 bg-surface-container-low p-1.5 rounded-full border border-primary-container/30">
-            {tabs.map(tab => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    isActive
-                      ? 'bg-primary text-on-primary shadow-md'
-                      : 'text-outline hover:text-on-surface hover:bg-surface-container'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">{tab.icon}</span>
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* Quick Lock App Button */}
-          <button
-            onClick={lockApp}
-            title="Lock App (Password Entry Required)"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-100 hover:bg-rose-200 text-rose-800 text-xs font-bold transition-all shadow-sm"
-          >
-            <span className="material-symbols-outlined text-sm">lock</span>
-            <span className="hidden sm:inline">Lock App</span>
-          </button>
-        </div>
+        {/* Navigation Ribbon for Desktop */}
+        <nav className="hidden sm:flex items-center gap-1 bg-surface-container-low p-1.5 rounded-full border border-primary-container/30">
+          {tabs.map(tab => {
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-primary text-on-primary shadow-md'
+                    : 'text-outline hover:text-on-surface hover:bg-surface-container'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm">{tab.icon}</span>
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
       {/* Mobile Bottom Navigation Ribbon */}
