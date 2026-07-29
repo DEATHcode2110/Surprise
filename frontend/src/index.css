@@ -66,10 +66,19 @@
 
 .animate-float {
   animation: float 6s ease-in-out infinite;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .animate-pulse-soft {
   animation: pulse-soft 3s ease-in-out infinite;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+}
+
+.gpu-accelerated {
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 .glass-card {
