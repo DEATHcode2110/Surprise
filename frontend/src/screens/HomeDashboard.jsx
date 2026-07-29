@@ -1,12 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import api from '../api/client';
+import { useTracker } from '../context/TrackerContext';
 
 export default function HomeDashboard({ onNavigate }) {
-  const [data, setData] = useState(null);
-  const [dueReminders, setDueReminders] = useState([]);
-  const [cyclesList, setCyclesList] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { insightsData, dueReminders, cycles, isInitialLoading, error, refreshAllData } = useTracker();
 
   // Period Start Modal State
   const [showModal, setShowModal] = useState(false);
@@ -17,28 +14,6 @@ export default function HomeDashboard({ onNavigate }) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const [insightsRes, dueRes, cyclesRes] = await Promise.all([
-        api.getInsights(),
-        api.getDueReminders(),
-        api.getCycles()
-      ]);
-      setData(insightsRes);
-      setDueReminders(dueRes.dueReminders || []);
-      setCyclesList(cyclesRes.cycles || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadDashboard();
-  }, []);
 
   const handleSavePeriodStart = async (e) => {
     e.preventDefault();
@@ -62,7 +37,7 @@ export default function HomeDashboard({ onNavigate }) {
         setNotes('');
       }, 1500);
 
-      await loadDashboard();
+      await refreshAllData();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -74,13 +49,13 @@ export default function HomeDashboard({ onNavigate }) {
     if (!confirm('Are you sure you want to delete this period entry?')) return;
     try {
       await api.deleteCycle(id);
-      await loadDashboard();
+      await refreshAllData();
     } catch (err) {
       alert(err.message);
     }
   };
 
-  if (loading) {
+  if (isInitialLoading && !insightsData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
         <div className="w-12 h-12 rounded-full border-4 border-primary-container border-t-primary animate-spin"></div>
@@ -89,19 +64,30 @@ export default function HomeDashboard({ onNavigate }) {
     );
   }
 
-  if (error) {
+  if (error && !insightsData) {
     return (
       <div className="p-6 max-w-md mx-auto my-8 bg-error-container/20 border border-error/30 rounded-3xl text-center">
         <span className="material-symbols-outlined text-4xl text-error mb-2">warning</span>
         <p className="text-sm font-semibold text-error">Unable to load dashboard data</p>
-        <button onClick={loadDashboard} className="mt-4 px-4 py-2 bg-primary text-on-primary rounded-full text-xs font-bold">
+        <button onClick={refreshAllData} className="mt-4 px-4 py-2 bg-primary text-on-primary rounded-full text-xs font-bold">
           Retry
         </button>
       </div>
     );
   }
 
-  const { predictions } = data;
+  const predictions = insightsData?.predictions || {
+    currentPhase: 'Follicular',
+    daysUntilNextPeriod: 28,
+    predictedNextStart: 'Calculating...',
+    confidenceLevel: 'Moderate',
+    confidenceScore: 75,
+    confidenceMessage: 'Building historical baseline...',
+    averageCycleLength: 28,
+    averagePeriodDuration: 5,
+    cycleCount: cycles.length
+  };
+  const cyclesList = cycles || [];
 
   return (
     <div className="space-y-6 pb-20">
