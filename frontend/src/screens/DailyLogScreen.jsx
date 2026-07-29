@@ -16,6 +16,10 @@ export default function DailyLogScreen() {
   const [isPeriodDay, setIsPeriodDay] = useState(false);
   const [flowIntensity, setFlowIntensity] = useState('medium');
 
+  // Log existence & editing mode state
+  const [hasExistingLog, setHasExistingLog] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [recentLogs, setRecentLogs] = useState([]);
@@ -27,16 +31,7 @@ export default function DailyLogScreen() {
         api.getDailyLogs()
       ]);
 
-      if (logRes.log) {
-        setSymptoms(logRes.log.symptoms || []);
-        setMoodTags(logRes.log.mood_tags || []);
-        setNotes(logRes.log.notes || '');
-      } else {
-        setSymptoms([]);
-        setMoodTags([]);
-        setNotes('');
-      }
-
+      const logObj = logRes.log;
       setRecentLogs(logsRes.logs || []);
 
       // Check if period flow is logged for selectedDate
@@ -45,12 +40,38 @@ export default function DailyLogScreen() {
         return flowMap[date] || (c.end_date && date >= c.start_date && date <= c.end_date);
       });
 
+      let periodActive = false;
+      let intensity = 'medium';
+
       if (activeCycle) {
-        setIsPeriodDay(true);
+        periodActive = true;
         const flowMap = activeCycle.flow_intensity || {};
-        setFlowIntensity(flowMap[date] || 'medium');
+        intensity = flowMap[date] || 'medium';
+      }
+
+      setIsPeriodDay(periodActive);
+      setFlowIntensity(intensity);
+
+      const hasLogData = Boolean(
+        logObj && (
+          (logObj.symptoms && logObj.symptoms.length > 0) ||
+          (logObj.mood_tags && logObj.mood_tags.length > 0) ||
+          (logObj.notes && logObj.notes.trim().length > 0)
+        )
+      );
+
+      if (hasLogData || periodActive) {
+        setSymptoms(logObj?.symptoms || []);
+        setMoodTags(logObj?.mood_tags || []);
+        setNotes(logObj?.notes || '');
+        setHasExistingLog(true);
+        setIsEditing(false); // Show saved view by default
       } else {
-        setIsPeriodDay(false);
+        setSymptoms([]);
+        setMoodTags([]);
+        setNotes('');
+        setHasExistingLog(false);
+        setIsEditing(true); // Open edit form if no log exists yet
       }
     } catch (err) {
       console.error(err);
@@ -89,9 +110,8 @@ export default function DailyLogScreen() {
 
       // Handle Period/Cycle Flow update
       if (isPeriodDay) {
-        // Find existing cycle to attach or create new cycle
         const matchingCycle = cycles.find(c => {
-          if (!c.end_date) return true; // Ongoing cycle
+          if (!c.end_date) return true;
           return selectedDate >= c.start_date && selectedDate <= c.end_date;
         });
 
@@ -104,7 +124,6 @@ export default function DailyLogScreen() {
             flow_intensity: updatedFlow
           });
         } else {
-          // Create new cycle starting on this date
           await api.createCycle({
             start_date: selectedDate,
             flow_intensity: { [selectedDate]: flowIntensity },
@@ -113,7 +132,9 @@ export default function DailyLogScreen() {
         }
       }
 
-      setMessage({ type: 'success', text: 'Daily log & symptoms saved successfully! ✨' });
+      setMessage({ type: 'success', text: 'Daily log updated & saved successfully! ✨' });
+      setHasExistingLog(true);
+      setIsEditing(false); // Switch to saved summary view upon saving
       await Promise.all([loadData(selectedDate), refreshAllData()]);
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
@@ -124,10 +145,19 @@ export default function DailyLogScreen() {
 
   return (
     <div className="space-y-6 pb-20 max-w-2xl mx-auto">
+      {/* Top Header Card */}
       <div className="glass-card rounded-4xl p-6 border border-primary-container/60 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-bold font-headline text-primary">Daily Log</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-2xl font-bold font-headline text-primary">Daily Log</h2>
+              {hasExistingLog && !isEditing && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                  <span className="material-symbols-outlined text-sm">check_circle</span>
+                  Saved
+                </span>
+              )}
+            </div>
             <p className="text-xs text-outline font-medium">Record how you are feeling today</p>
           </div>
 
@@ -147,137 +177,254 @@ export default function DailyLogScreen() {
           </div>
         )}
 
-        <form onSubmit={handleSave} className="space-y-6">
-          {/* Period Flow Intensity Section */}
-          <div className="p-4 rounded-3xl bg-surface-container-low border border-primary-container/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isPeriodDay}
-                  onChange={(e) => setIsPeriodDay(e.target.checked)}
-                  className="w-4 h-4 text-primary rounded accent-primary"
-                />
-                <span className="text-xs font-bold text-on-surface">Log Period Day / Flow</span>
-              </label>
+        {/* ------------------------------------------------------------- */}
+        {/* VIEW 1: SAVED DAILY LOG SUMMARY (with Edit button) */}
+        {/* ------------------------------------------------------------- */}
+        {hasExistingLog && !isEditing ? (
+          <div className="space-y-5">
+            {/* Header & Edit Button */}
+            <div className="flex items-center justify-between p-4 rounded-3xl bg-surface-container-low border border-primary-container/30">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600 text-xl">verified</span>
+                <div>
+                  <h3 className="font-bold text-sm text-on-surface">Saved Log for {selectedDate}</h3>
+                  <p className="text-[11px] text-outline">Click Edit to modify symptoms or notes</p>
+                </div>
+              </div>
 
-              {isPeriodDay && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-container text-primary font-bold">
-                  Period Active
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2 rounded-2xl bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-1.5 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-sm">edit</span>
+                Edit Log
+              </button>
+            </div>
+
+            {/* Period Flow Summary */}
+            {isPeriodDay && (
+              <div className="p-4 rounded-3xl bg-rose-500/10 border border-rose-300/60 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-rose-600 text-xl">water_drop</span>
+                  <div>
+                    <span className="text-xs font-bold text-rose-900 block">Period Active</span>
+                    <span className="text-[11px] text-rose-700 font-semibold capitalize">Flow: {flowIntensity}</span>
+                  </div>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-rose-200 text-rose-900 text-xs font-bold capitalize">
+                  {flowIntensity} Flow
                 </span>
+              </div>
+            )}
+
+            {/* Reported Symptoms Summary */}
+            <div>
+              <p className="text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">health_metrics</span>
+                Reported Symptoms
+              </p>
+              {symptoms.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {symptoms.map(sym => (
+                    <span
+                      key={sym}
+                      className="px-3.5 py-1.5 rounded-2xl text-xs font-bold capitalize bg-primary-container text-primary border border-primary/30 flex items-center gap-1.5 shadow-sm"
+                    >
+                      <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
+                      {sym}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-outline italic">No symptoms reported for this date.</p>
               )}
             </div>
 
-            {isPeriodDay && (
-              <div className="pt-2 border-t border-primary-container/20">
-                <p className="text-xs font-semibold text-outline mb-2">Flow Intensity:</p>
-                <div className="flex gap-2">
-                  {['light', 'medium', 'heavy'].map(level => (
-                    <button
-                      type="button"
-                      key={level}
-                      onClick={() => setFlowIntensity(level)}
-                      className={`flex-1 py-1.5 rounded-2xl text-xs font-bold capitalize transition-all ${
-                        flowIntensity === level
-                          ? 'bg-primary text-on-primary shadow-sm'
-                          : 'bg-surface-bright text-outline hover:text-on-surface'
-                      }`}
+            {/* Reported Mood Tags Summary */}
+            <div>
+              <p className="text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">sentiment_satisfied</span>
+                Logged Moods
+              </p>
+              {moodTags.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {moodTags.map(mood => (
+                    <span
+                      key={mood}
+                      className="px-3.5 py-1.5 rounded-2xl text-xs font-bold capitalize bg-secondary-container text-secondary border border-secondary/30 flex items-center gap-1.5 shadow-sm"
                     >
-                      {level}
-                    </button>
+                      <span className="material-symbols-outlined text-sm">favorite</span>
+                      {mood}
+                    </span>
                   ))}
+                </div>
+              ) : (
+                <p className="text-xs text-outline italic">No mood tags logged for this date.</p>
+              )}
+            </div>
+
+            {/* Notes Summary */}
+            {notes && (
+              <div>
+                <p className="text-xs font-bold text-primary mb-1.5 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">edit_note</span>
+                  Notes
+                </p>
+                <div className="p-3.5 rounded-2xl bg-surface-container-low border border-primary-container/30 text-xs font-medium text-on-surface leading-relaxed">
+                  "{notes}"
                 </div>
               </div>
             )}
           </div>
+        ) : (
+          /* ------------------------------------------------------------- */
+          /* VIEW 2: EDIT / CREATE INPUT FORM */
+          /* ------------------------------------------------------------- */
+          <form onSubmit={handleSave} className="space-y-6">
+            {/* Period Flow Intensity Section */}
+            <div className="p-4 rounded-3xl bg-surface-container-low border border-primary-container/30 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isPeriodDay}
+                    onChange={(e) => setIsPeriodDay(e.target.checked)}
+                    className="w-4 h-4 text-primary rounded accent-primary"
+                  />
+                  <span className="text-xs font-bold text-on-surface">Log Period Day / Flow</span>
+                </label>
 
-          {/* Preset Symptoms (Multi-select) */}
-          <div>
-            <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">health_metrics</span>
-              Symptoms (Select all that apply)
-            </label>
+                {isPeriodDay && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-container text-primary font-bold">
+                    Period Active
+                  </span>
+                )}
+              </div>
 
-            <div className="flex flex-wrap gap-2">
-              {PRESET_SYMPTOMS.map(sym => {
-                const selected = symptoms.includes(sym);
-                return (
-                  <button
-                    type="button"
-                    key={sym}
-                    onClick={() => toggleSymptom(sym)}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold capitalize transition-all flex items-center gap-1.5 ${
-                      selected
-                        ? 'bg-primary-container text-primary border border-primary/40 shadow-sm scale-105'
-                        : 'bg-surface-container-low text-outline hover:text-on-surface border border-transparent'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {selected ? 'check_circle' : 'add_circle'}
-                    </span>
-                    {sym}
-                  </button>
-                );
-              })}
+              {isPeriodDay && (
+                <div className="pt-2 border-t border-primary-container/20">
+                  <p className="text-xs font-semibold text-outline mb-2">Flow Intensity:</p>
+                  <div className="flex gap-2">
+                    {['light', 'medium', 'heavy'].map(level => (
+                      <button
+                        type="button"
+                        key={level}
+                        onClick={() => setFlowIntensity(level)}
+                        className={`flex-1 py-1.5 rounded-2xl text-xs font-bold capitalize transition-all ${
+                          flowIntensity === level
+                            ? 'bg-primary text-on-primary shadow-sm'
+                            : 'bg-surface-bright text-outline hover:text-on-surface'
+                        }`}
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
 
-          {/* Mood Tags (Multi-select) */}
-          <div>
-            <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">sentiment_satisfied</span>
-              Mood Tags
-            </label>
+            {/* Preset Symptoms (Multi-select) */}
+            <div>
+              <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">health_metrics</span>
+                Symptoms (Select all that apply)
+              </label>
 
-            <div className="flex flex-wrap gap-2">
-              {PRESET_MOODS.map(mood => {
-                const selected = moodTags.includes(mood);
-                return (
-                  <button
-                    type="button"
-                    key={mood}
-                    onClick={() => toggleMood(mood)}
-                    className={`px-3.5 py-2 rounded-2xl text-xs font-bold capitalize transition-all flex items-center gap-1.5 ${
-                      selected
-                        ? 'bg-secondary-container text-secondary border border-secondary/40 shadow-sm scale-105'
-                        : 'bg-surface-container-low text-outline hover:text-on-surface border border-transparent'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-sm">
-                      {selected ? 'favorite' : 'mood'}
-                    </span>
-                    {mood}
-                  </button>
-                );
-              })}
+              <div className="flex flex-wrap gap-2">
+                {PRESET_SYMPTOMS.map(sym => {
+                  const selected = symptoms.includes(sym);
+                  return (
+                    <button
+                      type="button"
+                      key={sym}
+                      onClick={() => toggleSymptom(sym)}
+                      className={`px-3.5 py-2 rounded-2xl text-xs font-bold capitalize transition-all flex items-center gap-1.5 ${
+                        selected
+                          ? 'bg-primary-container text-primary border border-primary/40 shadow-sm scale-105'
+                          : 'bg-surface-container-low text-outline hover:text-on-surface border border-transparent'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {selected ? 'check_circle' : 'add_circle'}
+                      </span>
+                      {sym}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Free-text Notes */}
-          <div>
-            <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">edit_note</span>
-              Free-text Notes
-            </label>
+            {/* Mood Tags (Multi-select) */}
+            <div>
+              <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">sentiment_satisfied</span>
+                Mood Tags
+              </label>
 
-            <textarea
-              rows={3}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="How are you feeling today? Add any details or note for your partner..."
-              className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
-            />
-          </div>
+              <div className="flex flex-wrap gap-2">
+                {PRESET_MOODS.map(mood => {
+                  const selected = moodTags.includes(mood);
+                  return (
+                    <button
+                      type="button"
+                      key={mood}
+                      onClick={() => toggleMood(mood)}
+                      className={`px-3.5 py-2 rounded-2xl text-xs font-bold capitalize transition-all flex items-center gap-1.5 ${
+                        selected
+                          ? 'bg-secondary-container text-secondary border border-secondary/40 shadow-sm scale-105'
+                          : 'bg-surface-container-low text-outline hover:text-on-surface border border-transparent'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-sm">
+                        {selected ? 'favorite' : 'mood'}
+                      </span>
+                      {mood}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="w-full py-3 bg-primary hover:bg-primary/90 text-on-primary rounded-2xl font-bold font-headline text-sm shadow-md transition-all flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-base">save</span>
-            {saving ? 'Saving Log...' : 'Save Daily Log'}
-          </button>
-        </form>
+            {/* Free-text Notes */}
+            <div>
+              <label className="block text-xs font-bold text-primary mb-2 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-sm">edit_note</span>
+                Free-text Notes
+              </label>
+
+              <textarea
+                rows={3}
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="How are you feeling today? Add any details or note for your partner..."
+                className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {hasExistingLog && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="flex-1 py-3 bg-surface-container text-outline rounded-2xl font-bold text-xs"
+                >
+                  Cancel
+                </button>
+              )}
+
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 py-3 bg-primary hover:bg-primary/90 text-on-primary rounded-2xl font-bold font-headline text-sm shadow-md transition-all flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">save</span>
+                {saving ? 'Saving...' : hasExistingLog ? 'Update Daily Log' : 'Save Daily Log'}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       {/* Recent Logs History */}
