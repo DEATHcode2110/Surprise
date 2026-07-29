@@ -1,27 +1,10 @@
-import React, { useEffect, useState } from 'react';
-import api from '../api/client';
+import React, { useState } from 'react';
+import { useTracker } from '../context/TrackerContext';
 
 export default function SharedPartnerScreen() {
-  const [partnerData, setPartnerData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { partnerView, isInitialLoading } = useTracker();
   const [sentNote, setSentNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
-
-  const loadPartnerView = async () => {
-    try {
-      setLoading(true);
-      const res = await api.getPartnerView();
-      setPartnerData(res.partnerView);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadPartnerView();
-  }, []);
 
   const handleSendNote = (e) => {
     e.preventDefault();
@@ -33,7 +16,7 @@ export default function SharedPartnerScreen() {
     }, 4000);
   };
 
-  if (loading) {
+  if (isInitialLoading && !partnerView) {
     return (
       <div className="text-center py-16 text-xs text-outline font-semibold">
         Loading partner cycle summary...
@@ -42,16 +25,16 @@ export default function SharedPartnerScreen() {
   }
 
   const {
-    partnerName,
-    currentPhase,
-    daysUntilNextPeriod,
-    predictedNextPeriodStart,
-    pmsWindow,
-    isPmsActive,
-    isMenstrualActive,
-    todayLogged,
-    partnerGuidance
-  } = partnerData;
+    partnerName = 'My Girlfriend',
+    currentPhase = 'Follicular',
+    daysUntilNextPeriod = 28,
+    predictedNextPeriodStart = '',
+    pmsWindow = { startDate: '', endDate: '' },
+    isPmsActive = false,
+    isMenstrualActive = false,
+    todayLogged = { symptoms: [], moods: [], notes: '' },
+    partnerGuidance = []
+  } = partnerView || {};
 
   return (
     <div className="space-y-6 pb-20 max-w-2xl mx-auto">
