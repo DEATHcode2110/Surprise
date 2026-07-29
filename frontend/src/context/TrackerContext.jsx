@@ -3,18 +3,11 @@ import api from '../api/client';
 
 const TrackerContext = createContext(null);
 
-const DEFAULT_PASSWORD = '1234';
+const PERMANENT_PASSWORD = '0106';
 
 export function TrackerProvider({ children }) {
-  // Password lock state
-  const [isLocked, setIsLocked] = useState(() => {
-    const savedLock = localStorage.getItem('bloom_app_locked');
-    return savedLock !== 'false'; // default to locked on start for privacy
-  });
-
-  const [masterPassword, setMasterPassword] = useState(() => {
-    return localStorage.getItem('bloom_app_password') || DEFAULT_PASSWORD;
-  });
+  // Always start locked whenever page is reloaded
+  const [isLocked, setIsLocked] = useState(true);
 
   // Centralized cached data state
   const [cycles, setCycles] = useState([]);
@@ -28,7 +21,7 @@ export function TrackerProvider({ children }) {
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load all primary data in parallel for instant display
+  // Load all primary data in parallel
   const refreshAllData = useCallback(async () => {
     try {
       const [insightsRes, dueRes, cyclesRes, remindersRes, profileRes, partnerRes] = await Promise.allSettled([
@@ -60,37 +53,22 @@ export function TrackerProvider({ children }) {
     refreshAllData();
   }, [refreshAllData]);
 
-  // Unlock / Lock functions
+  // Unlock function checking permanent password 0106
   const unlockApp = (inputPassword) => {
-    if (inputPassword === masterPassword || inputPassword === DEFAULT_PASSWORD) {
+    if (inputPassword === PERMANENT_PASSWORD) {
       setIsLocked(false);
-      localStorage.setItem('bloom_app_locked', 'false');
       return { success: true };
     }
-    return { success: false, error: 'Incorrect password. Try again!' };
+    return { success: false, error: 'Incorrect password. Please try again!' };
   };
 
   const lockApp = () => {
     setIsLocked(true);
-    localStorage.setItem('bloom_app_locked', 'true');
-  };
-
-  const changePassword = (currentPwd, newPwd) => {
-    if (currentPwd !== masterPassword && currentPwd !== DEFAULT_PASSWORD) {
-      return { success: false, error: 'Current password does not match.' };
-    }
-    if (!newPwd || newPwd.length < 4) {
-      return { success: false, error: 'Password must be at least 4 characters.' };
-    }
-    setMasterPassword(newPwd);
-    localStorage.setItem('bloom_app_password', newPwd);
-    return { success: true, message: 'Password updated successfully!' };
   };
 
   // Calendar data cache loader
   const getCalendarMonth = useCallback(async (monthStr) => {
     if (calendarCache[monthStr]) {
-      // Background revalidate
       api.getCalendar(monthStr).then(res => {
         setCalendarCache(prev => ({ ...prev, [monthStr]: res }));
       }).catch(err => console.error(err));
@@ -101,13 +79,10 @@ export function TrackerProvider({ children }) {
     return res;
   }, [calendarCache]);
 
-  // Value provided to all components
   const value = {
     isLocked,
     unlockApp,
     lockApp,
-    changePassword,
-    masterPassword,
     isInitialLoading,
     error,
     cycles,
@@ -120,7 +95,6 @@ export function TrackerProvider({ children }) {
     refreshAllData,
     getCalendarMonth,
 
-    // Helper mutate actions to immediately update state
     setCycles,
     setReminders,
     setProfile,
