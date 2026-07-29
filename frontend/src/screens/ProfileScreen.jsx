@@ -1,38 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/client';
+import { useTracker } from '../context/TrackerContext';
 
 export default function ProfileScreen({ onProfileUpdate }) {
+  const { profile, refreshAllData, changePassword, masterPassword } = useTracker();
+
   const [partnerName, setPartnerName] = useState('My Girlfriend');
   const [userName, setUserName] = useState('Partner');
   const [favoriteSnacks, setFavoriteSnacks] = useState('');
   const [favoriteDrinks, setFavoriteDrinks] = useState('');
   const [careNotes, setCareNotes] = useState('');
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
-  const loadProfile = async () => {
-    try {
-      setLoading(true);
-      const res = await api.getProfile();
-      const { profile } = res;
+  // Security password state
+  const [currentPwd, setCurrentPwd] = useState('');
+  const [newPwd, setNewPwd] = useState('');
+  const [pwdMsg, setPwdMsg] = useState(null);
+
+  useEffect(() => {
+    if (profile) {
       setPartnerName(profile.partnerName || 'My Girlfriend');
       setUserName(profile.userName || 'Partner');
       const d = profile.details || {};
       setFavoriteSnacks(d.favoriteSnacks || '');
       setFavoriteDrinks(d.favoriteDrinks || '');
       setCareNotes(d.careNotes || '');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  }, [profile]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -51,6 +47,7 @@ export default function ProfileScreen({ onProfileUpdate }) {
       });
 
       setMessage({ type: 'success', text: 'Couple & Girlfriend details updated! 🌸💖' });
+      await refreshAllData();
       if (onProfileUpdate) onProfileUpdate(res.profile);
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
@@ -59,13 +56,18 @@ export default function ProfileScreen({ onProfileUpdate }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="text-center py-16 text-xs text-outline font-semibold">
-        Loading couple details...
-      </div>
-    );
-  }
+  const handleChangePassword = (e) => {
+    e.preventDefault();
+    setPwdMsg(null);
+    const res = changePassword(currentPwd, newPwd);
+    if (res.success) {
+      setPwdMsg({ type: 'success', text: res.message });
+      setCurrentPwd('');
+      setNewPwd('');
+    } else {
+      setPwdMsg({ type: 'error', text: res.error });
+    }
+  };
 
   return (
     <div className="space-y-6 pb-20 max-w-2xl mx-auto">
@@ -179,6 +181,61 @@ export default function ProfileScreen({ onProfileUpdate }) {
         >
           <span className="material-symbols-outlined text-base">save</span>
           {saving ? 'Saving Details...' : 'Save Girlfriend & Couple Details'}
+        </button>
+      </form>
+
+      {/* Security & Password Entry Lock Settings */}
+      <form onSubmit={handleChangePassword} className="glass-card rounded-4xl p-6 border border-rose-300/60 space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-rose-100 flex items-center justify-center text-rose-700">
+            <span className="material-symbols-outlined text-base">lock</span>
+          </div>
+          <div>
+            <h3 className="font-bold font-headline text-base text-rose-900">App Entry Password Settings</h3>
+            <p className="text-xs text-outline">Change the passcode required to enter and view data</p>
+          </div>
+        </div>
+
+        {pwdMsg && (
+          <div className={`p-3 rounded-2xl text-xs font-bold text-center ${
+            pwdMsg.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {pwdMsg.text}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-bold text-outline mb-1">Current Passcode</label>
+            <input
+              type="password"
+              required
+              placeholder="e.g. 1234"
+              value={currentPwd}
+              onChange={(e) => setCurrentPwd(e.target.value)}
+              className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-outline mb-1">New Passcode (min 4 chars)</label>
+            <input
+              type="password"
+              required
+              placeholder="Enter new password..."
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+              className="w-full p-3 rounded-2xl bg-surface-container-low border border-primary-container/40 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="w-full py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-base">key</span>
+          Update App Lock Passcode
         </button>
       </form>
     </div>
