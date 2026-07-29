@@ -24,33 +24,34 @@ function AppContent() {
     );
   }
 
+  const renderScreen = () => {
+    switch (activeTab) {
+      case 'home':
+        return <HomeDashboard onNavigate={setActiveTab} />;
+      case 'log':
+        return <DailyLogScreen />;
+      case 'calendar':
+        return <CalendarScreen onSelectDate={() => setActiveTab('log')} />;
+      case 'insights':
+        return <InsightsScreen />;
+      case 'reminders':
+        return <RemindersScreen />;
+      case 'partner':
+        return <SharedPartnerScreen />;
+      case 'profile':
+        return <ProfileScreen />;
+      default:
+        return <HomeDashboard onNavigate={setActiveTab} />;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-on-background relative">
       <AnimatedBowsBackground />
       <div className="relative z-10">
         <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
         <main className="max-w-4xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 pb-28 sm:pb-12">
-          <div className={activeTab === 'home' ? 'block' : 'hidden'}>
-            <HomeDashboard onNavigate={setActiveTab} />
-          </div>
-          <div className={activeTab === 'log' ? 'block' : 'hidden'}>
-            <DailyLogScreen />
-          </div>
-          <div className={activeTab === 'calendar' ? 'block' : 'hidden'}>
-            <CalendarScreen onSelectDate={() => setActiveTab('log')} />
-          </div>
-          <div className={activeTab === 'insights' ? 'block' : 'hidden'}>
-            <InsightsScreen />
-          </div>
-          <div className={activeTab === 'reminders' ? 'block' : 'hidden'}>
-            <RemindersScreen />
-          </div>
-          <div className={activeTab === 'partner' ? 'block' : 'hidden'}>
-            <SharedPartnerScreen />
-          </div>
-          <div className={activeTab === 'profile' ? 'block' : 'hidden'}>
-            <ProfileScreen />
-          </div>
+          {renderScreen()}
         </main>
       </div>
     </div>
