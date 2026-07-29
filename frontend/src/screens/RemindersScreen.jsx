@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import api from '../api/client';
+import { useTracker } from '../context/TrackerContext';
 
 export default function RemindersScreen() {
-  const [reminders, setReminders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { reminders, setReminders, refreshAllData, isInitialLoading } = useTracker();
   const [triggerStatus, setTriggerStatus] = useState(null);
 
   // Form state for creating reminder
@@ -13,22 +13,6 @@ export default function RemindersScreen() {
   const [phaseTrigger, setPhaseTrigger] = useState('pms');
   const [timeOfDay, setTimeOfDay] = useState('09:00');
   const [submitting, setSubmitting] = useState(false);
-
-  const loadReminders = async () => {
-    try {
-      setLoading(true);
-      const res = await api.getReminders();
-      setReminders(res.reminders || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadReminders();
-  }, []);
 
   const handleToggle = async (reminder) => {
     try {
@@ -65,7 +49,7 @@ export default function RemindersScreen() {
 
       setLabel('');
       setShowModal(false);
-      await loadReminders();
+      await refreshAllData();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -126,7 +110,7 @@ export default function RemindersScreen() {
 
       {/* Reminders List */}
       <div className="space-y-3">
-        {loading ? (
+        {isInitialLoading && reminders.length === 0 ? (
           <div className="text-center py-10 text-xs text-outline">Loading reminders...</div>
         ) : reminders.length === 0 ? (
           <div className="text-center py-12 glass-card rounded-3xl border border-primary-container/40">
