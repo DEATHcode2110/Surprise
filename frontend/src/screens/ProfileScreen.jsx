@@ -241,3 +241,4 @@ export default function ProfileScreen({ onProfileUpdate }) {
     </div>
   );
 }
+
