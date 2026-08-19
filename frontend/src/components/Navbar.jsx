@@ -4,6 +4,7 @@ export default function Navbar({ activeTab, setActiveTab }) {
   const tabs = [
     { id: 'home', label: 'Home', icon: 'home' },
     { id: 'log', label: 'Daily Log', icon: 'edit_note' },
+    { id: 'diary', label: 'Diary', icon: 'book_4' },
     { id: 'calendar', label: 'Calendar', icon: 'calendar_month' },
     { id: 'insights', label: 'Insights', icon: 'insights' },
     { id: 'reminders', label: 'Reminders', icon: 'notifications_active' },
