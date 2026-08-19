@@ -10,6 +10,7 @@ import SharedPartnerScreen from './screens/SharedPartnerScreen';
 import InsightsScreen from './screens/InsightsScreen';
 import CalendarScreen from './screens/CalendarScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import DailyDiaryScreen from './screens/DailyDiaryScreen';
 
 function AppContent() {
   const { isLocked } = useTracker();
@@ -30,6 +31,8 @@ function AppContent() {
         return <HomeDashboard onNavigate={setActiveTab} />;
       case 'log':
         return <DailyLogScreen />;
+      case 'diary':
+        return <DailyDiaryScreen />;
       case 'calendar':
         return <CalendarScreen onSelectDate={() => setActiveTab('log')} />;
       case 'insights':
