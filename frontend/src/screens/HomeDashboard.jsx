@@ -135,7 +135,7 @@ export default function HomeDashboard({ onNavigate }) {
       </div>
 
       {/* Quick Action Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Daily Log Quick Action */}
         <div
           onClick={() => onNavigate('log')}
@@ -147,8 +147,23 @@ export default function HomeDashboard({ onNavigate }) {
             </div>
             <span className="material-symbols-outlined text-outline group-hover:text-primary group-hover:translate-x-1 transition-all">chevron_right</span>
           </div>
-          <h3 className="font-bold font-headline text-lg text-on-surface">Log Symptoms & Mood</h3>
-          <p className="text-xs text-outline mt-1">Track cramps, headaches, flow, and daily mood tags</p>
+          <h3 className="font-bold font-headline text-lg text-on-surface">Log Symptoms</h3>
+          <p className="text-xs text-outline mt-1">Track cramps, flow, and daily mood tags</p>
+        </div>
+
+        {/* Personal Diary Quick Action */}
+        <div
+          onClick={() => onNavigate('diary')}
+          className="glass-card rounded-3xl p-5 border border-primary-container/50 hover:border-primary transition-all cursor-pointer group hover:shadow-md bg-gradient-to-br from-primary-container/20 to-transparent"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-2xl bg-secondary-container/80 flex items-center justify-center text-secondary group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">menu_book</span>
+            </div>
+            <span className="material-symbols-outlined text-outline group-hover:text-primary group-hover:translate-x-1 transition-all">chevron_right</span>
+          </div>
+          <h3 className="font-bold font-headline text-lg text-on-surface">Personal Diary</h3>
+          <p className="text-xs text-outline mt-1">Write daily life thoughts & journal entries</p>
         </div>
 
         {/* Calendar Quick Action */}
@@ -163,7 +178,7 @@ export default function HomeDashboard({ onNavigate }) {
             <span className="material-symbols-outlined text-outline group-hover:text-secondary group-hover:translate-x-1 transition-all">chevron_right</span>
           </div>
           <h3 className="font-bold font-headline text-lg text-on-surface">Cycle Calendar</h3>
-          <p className="text-xs text-outline mt-1">View color-coded period dates & predicted PMS window</p>
+          <p className="text-xs text-outline mt-1">View color-coded period dates & PMS window</p>
         </div>
       </div>
 
