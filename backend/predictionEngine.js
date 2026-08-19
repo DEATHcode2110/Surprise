@@ -39,7 +39,7 @@ export function computePredictions(cycles = [], todayStr = new Date().toISOStrin
       cycleCount: 0,
       averageCycleLength: 28,
       averagePeriodDuration: 5,
-      lastPeriodStart: defaultStart,
+      lastPeriodStart: 'Not Logged Yet',
       predictedNextStart: nextStart,
       predictedNextEnd: formatDate(addDays(parseDate(nextStart), 5)),
       pmsWindow: {
@@ -93,7 +93,13 @@ export function computePredictions(cycles = [], todayStr = new Date().toISOStrin
   const today = parseDate(todayStr);
 
   // Compute predicted next start date
-  const predictedNextStartObj = addDays(lastStart, averageCycleLength);
+  let predictedNextStartObj = addDays(lastStart, averageCycleLength);
+
+  // If the predicted start date is in the past, project forward in averageCycleLength steps until it is today or in the future
+  while (diffDays(predictedNextStartObj, today) < 0) {
+    predictedNextStartObj = addDays(predictedNextStartObj, averageCycleLength);
+  }
+
   const predictedNextStart = formatDate(predictedNextStartObj);
   const predictedNextEnd = formatDate(addDays(predictedNextStartObj, averagePeriodDuration - 1));
 
