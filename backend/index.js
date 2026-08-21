@@ -12,6 +12,7 @@ import reminderRoutes from './routes/reminders.js';
 import insightRoutes from './routes/insights.js';
 import calendarRoutes from './routes/calendar.js';
 import partnerRoutes from './routes/partner.js';
+import bootstrapRoutes from './routes/bootstrap.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,6 +27,7 @@ app.use(cors({
 app.use(express.json());
 
 // Register API routes
+app.use('/api/bootstrap', bootstrapRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/cycles', cycleRoutes);
 app.use('/api/daily-logs', dailyLogRoutes);
