@@ -3,7 +3,7 @@ import api from '../api/client';
 import { useTracker } from '../context/TrackerContext';
 
 export default function ProfileScreen({ onProfileUpdate }) {
-  const { profile, refreshAllData } = useTracker();
+  const { profile, updateProfile, refreshAllData } = useTracker();
 
   const [partnerName, setPartnerName] = useState('My Girlfriend');
   const [userName, setUserName] = useState('Partner');
@@ -31,7 +31,7 @@ export default function ProfileScreen({ onProfileUpdate }) {
       setSaving(true);
       setMessage(null);
 
-      const res = await api.updateProfile({
+      const profilePayload = {
         partnerName: partnerName.trim() || 'My Girlfriend',
         userName: userName.trim() || 'Partner',
         details: {
@@ -39,11 +39,18 @@ export default function ProfileScreen({ onProfileUpdate }) {
           favoriteDrinks: favoriteDrinks.trim(),
           careNotes: careNotes.trim()
         }
-      });
+      };
+
+      let res;
+      if (updateProfile) {
+        res = await updateProfile(profilePayload);
+      } else {
+        res = await api.updateProfile(profilePayload);
+        await refreshAllData();
+      }
 
       setMessage({ type: 'success', text: 'Couple & Girlfriend details updated! 🌸💖' });
-      await refreshAllData();
-      if (onProfileUpdate) onProfileUpdate(res.profile);
+      if (onProfileUpdate) onProfileUpdate(res?.profile || profilePayload);
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -70,9 +77,8 @@ export default function ProfileScreen({ onProfileUpdate }) {
       </div>
 
       {message && (
-        <div className={`p-4 rounded-3xl text-xs font-bold text-center ${
-          message.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-        }`}>
+        <div className={`p-4 rounded-3xl text-xs font-bold text-center ${message.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+          }`}>
           {message.text}
         </div>
       )}
