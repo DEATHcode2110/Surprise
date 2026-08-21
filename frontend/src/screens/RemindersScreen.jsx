@@ -15,22 +15,28 @@ export default function RemindersScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   const handleToggle = async (reminder) => {
+    const nextState = !reminder.is_active;
+    setReminders(prev => prev.map(r => r.id === reminder.id ? { ...r, is_active: nextState } : r));
     try {
-      const updated = await api.updateReminder(reminder.id, {
-        is_active: !reminder.is_active
+      await api.updateReminder(reminder.id, {
+        is_active: nextState
       });
-      setReminders(prev => prev.map(r => r.id === reminder.id ? updated.reminder : r));
+      refreshAllData();
     } catch (err) {
+      setReminders(prev => prev.map(r => r.id === reminder.id ? { ...r, is_active: !nextState } : r));
       alert(err.message);
     }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this reminder?')) return;
+    const previous = reminders;
+    setReminders(prev => prev.filter(r => r.id !== id));
     try {
       await api.deleteReminder(id);
-      setReminders(prev => prev.filter(r => r.id !== id));
+      refreshAllData();
     } catch (err) {
+      setReminders(previous);
       alert(err.message);
     }
   };
@@ -121,14 +127,12 @@ export default function RemindersScreen() {
           reminders.map(rem => (
             <div
               key={rem.id}
-              className={`p-4 rounded-3xl glass-card border transition-all flex items-center justify-between ${
-                rem.is_active ? 'border-primary-container/60 bg-surface-bright' : 'border-outline/20 opacity-60'
-              }`}
+              className={`p-4 rounded-3xl glass-card border transition-all flex items-center justify-between ${rem.is_active ? 'border-primary-container/60 bg-surface-bright' : 'border-outline/20 opacity-60'
+                }`}
             >
               <div className="flex items-center gap-3.5">
-                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
-                  rem.is_active ? 'bg-primary-container text-primary' : 'bg-surface-container text-outline'
-                }`}>
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${rem.is_active ? 'bg-primary-container text-primary' : 'bg-surface-container text-outline'
+                  }`}>
                   <span className="material-symbols-outlined text-2xl">
                     {rem.label.toLowerCase().includes('pill') ? 'medication' : 'alarm'}
                   </span>
@@ -153,9 +157,8 @@ export default function RemindersScreen() {
                 {/* Active Toggle */}
                 <button
                   onClick={() => handleToggle(rem)}
-                  className={`w-12 h-7 rounded-full p-1 transition-colors flex items-center ${
-                    rem.is_active ? 'bg-primary justify-end' : 'bg-surface-container-highest justify-start'
-                  }`}
+                  className={`w-12 h-7 rounded-full p-1 transition-colors flex items-center ${rem.is_active ? 'bg-primary justify-end' : 'bg-surface-container-highest justify-start'
+                    }`}
                 >
                   <div className="w-5 h-5 rounded-full bg-white shadow-sm"></div>
                 </button>
