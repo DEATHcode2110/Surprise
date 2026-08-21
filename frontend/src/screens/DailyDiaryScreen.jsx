@@ -3,47 +3,34 @@ import api from '../api/client';
 import { useTracker } from '../context/TrackerContext';
 
 export default function DailyDiaryScreen() {
-  const { refreshAllData } = useTracker();
+  const { dailyLogs, dailyLogsMap, saveDailyLog: saveDailyLogInContext, refreshAllData } = useTracker();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [diaryEntry, setDiaryEntry] = useState('');
   const [hasExistingLog, setHasExistingLog] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  const [recentEntries, setRecentEntries] = useState([]);
 
-  const loadData = async (date) => {
-    try {
-      const [logRes, logsRes] = await Promise.all([
-        api.getDailyLogByDate(date),
-        api.getDailyLogs()
-      ]);
+  // Compute recent entries from cached dailyLogs (0ms instant lookup)
+  const recentEntries = (dailyLogs || []).filter(
+    l => l.notes && l.notes.trim().length > 0
+  );
 
-      const logObj = logRes.log;
-      const filteredRecent = (logsRes.logs || []).filter(
-        l => l.notes && l.notes.trim().length > 0
-      );
-      setRecentEntries(filteredRecent);
-
-      const hasNotes = Boolean(logObj && logObj.notes && logObj.notes.trim().length > 0);
-
-      if (hasNotes) {
-        setDiaryEntry(logObj.notes);
-        setHasExistingLog(true);
-        setIsEditing(false);
-      } else {
-        setDiaryEntry('');
-        setHasExistingLog(false);
-        setIsEditing(true);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
+  // Synchronously load diary entry from local cache when date changes (0ms delay)
   useEffect(() => {
-    loadData(selectedDate);
-  }, [selectedDate]);
+    const logObj = dailyLogsMap[selectedDate];
+    const hasNotes = Boolean(logObj && logObj.notes && logObj.notes.trim().length > 0);
+
+    if (hasNotes) {
+      setDiaryEntry(logObj.notes);
+      setHasExistingLog(true);
+      setIsEditing(false);
+    } else {
+      setDiaryEntry('');
+      setHasExistingLog(false);
+      setIsEditing(true);
+    }
+  }, [selectedDate, dailyLogsMap]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -51,21 +38,26 @@ export default function DailyDiaryScreen() {
       setSaving(true);
       setMessage(null);
 
-      // Fetch existing log for the date to preserve symptoms and mood_tags
-      const existingRes = await api.getDailyLogByDate(selectedDate);
-      const currentLog = existingRes.log || {};
+      // Fetch existing log from context cache to preserve symptoms and mood_tags
+      const currentLog = dailyLogsMap[selectedDate] || {};
 
-      await api.saveDailyLog({
+      const payload = {
         date: selectedDate,
         symptoms: currentLog.symptoms || [],
         mood_tags: currentLog.mood_tags || [],
         notes: diaryEntry.trim()
-      });
+      };
+
+      if (saveDailyLogInContext) {
+        await saveDailyLogInContext(payload);
+      } else {
+        await api.saveDailyLog(payload);
+      }
 
       setMessage({ type: 'success', text: 'Diary entry saved successfully! 📖💖' });
       setHasExistingLog(true);
       setIsEditing(false);
-      await Promise.all([loadData(selectedDate), refreshAllData()]);
+      await refreshAllData();
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -119,7 +111,7 @@ export default function DailyDiaryScreen() {
               <button
                 type="button"
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-1.5 rounded-2xl bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-1 shadow-sm"
+                className="px-4 py-1.5 rounded-2xl bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
               >
                 <span className="material-symbols-outlined text-sm">edit</span>
                 Edit Entry
@@ -141,7 +133,7 @@ export default function DailyDiaryScreen() {
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="text-xs font-bold text-outline hover:text-on-surface"
+                  className="text-xs font-bold text-outline hover:text-on-surface cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -160,7 +152,7 @@ export default function DailyDiaryScreen() {
               <button
                 type="submit"
                 disabled={saving || !diaryEntry.trim()}
-                className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-on-primary rounded-2xl font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2"
+                className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-on-primary rounded-2xl font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-base">save</span>
                 {saving ? 'Saving Entry...' : 'Save Journal Entry'}
@@ -207,4 +199,3 @@ export default function DailyDiaryScreen() {
     </div>
   );
 }
-
