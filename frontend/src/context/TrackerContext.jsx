@@ -286,7 +286,7 @@ export function TrackerProvider({ children }) {
       // Revalidate in background silently
       api.getCalendar(monthStr).then(res => {
         setCalendarCache(prev => ({ ...prev, [monthStr]: res }));
-      }).catch(() => {});
+      }).catch(() => { });
       return calendarCache[monthStr];
     }
     const res = await api.getCalendar(monthStr);
