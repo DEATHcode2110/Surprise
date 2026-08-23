@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 import { computePredictions } from './predictionEngine.js';
 
 dotenv.config();
@@ -14,13 +15,13 @@ const STORE_PATH = path.join(__dirname, 'bloom_store.json');
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
-// Check if valid remote Supabase credentials exist (not placeholder)
-const isRemoteSupabaseConfigured = Boolean(
-  supabaseUrl &&
-  supabaseKey &&
-  !supabaseUrl.includes('placeholder.supabase.co') &&
-  !supabaseKey.includes('placeholder-key')
-);
+export const isRealSupabaseConfigured = Boolean(supabaseUrl && supabaseKey && supabaseUrl.startsWith('http'));
+
+if (isRealSupabaseConfigured) {
+  console.log('⚡ Connected to real Supabase project:', supabaseUrl);
+} else {
+  console.log('🌸 Running in local embedded store mode (Supabase credentials not set in .env)');
+}
 
 // Dynamic relative date generator for initial high-accuracy baseline seed
 function getRecentSeedDates() {
@@ -417,29 +418,77 @@ class LocalQueryBuilder {
   }
 }
 
-// Fast Local Supabase-compatible Client
-export const supabase = {
-  from(tableName) {
-    return new LocalQueryBuilder(tableName);
+// Supabase Client: Uses real Supabase client when configured, otherwise falls back to local query builder
+export const supabase = isRealSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseKey)
+  : {
+      from(tableName) {
+        return new LocalQueryBuilder(tableName);
+      }
+    };
+
+// Unified Instant Bootstrap Data Aggregator (< 1ms local / single roundtrip Supabase)
+export async function getBootstrapData(userId = 1) {
+  let user, userCycles, userReminders, userLogs;
+
+  if (isRealSupabaseConfigured) {
+    try {
+      let userRes = await supabase.from('users').select('*').eq('id', userId).maybeSingle();
+      let targetUserId = userId;
+
+      if (!userRes.data) {
+        const firstUserRes = await supabase.from('users').select('*').limit(1).maybeSingle();
+        if (firstUserRes.data) {
+          userRes = firstUserRes;
+          targetUserId = firstUserRes.data.id;
+        }
+      }
+
+      const [cyclesRes, remindersRes, logsRes] = await Promise.all([
+        supabase.from('cycles').select('*').eq('user_id', targetUserId).order('start_date', { ascending: false }),
+        supabase.from('reminders').select('*').eq('user_id', targetUserId).order('time_of_day', { ascending: true }),
+        supabase.from('daily_logs').select('*').eq('user_id', targetUserId).order('date', { ascending: false })
+      ]);
+
+      user = userRes.data || { id: targetUserId, partner_name: 'Partner', user_name: 'User', details: {} };
+      userCycles = (cyclesRes.data || []).map(c => ({
+        ...c,
+        flow_intensity: typeof c.flow_intensity === 'string' ? (tryParseJson(c.flow_intensity) || {}) : (c.flow_intensity || {})
+      }));
+      userReminders = remindersRes.data || [];
+      userLogs = (logsRes.data || []).map(l => ({
+        ...l,
+        symptoms: typeof l.symptoms === 'string' ? (tryParseJson(l.symptoms) || []) : (l.symptoms || []),
+        mood_tags: typeof l.mood_tags === 'string' ? (tryParseJson(l.mood_tags) || []) : (l.mood_tags || [])
+      }));
+    } catch (err) {
+      console.warn('Real Supabase fetch error in getBootstrapData:', err.message);
+      user = { id: userId, partner_name: 'Partner', user_name: 'User', details: {} };
+      userCycles = [];
+      userReminders = [];
+      userLogs = [];
+    }
+  } else {
+    const store = loadMemoryStore();
+    user = store.users.find(u => Number(u.id) === Number(userId)) || store.users[0];
+    userCycles = [...(store.cycles || [])]
+      .filter(c => Number(c.user_id) === Number(userId))
+      .sort((a, b) => (a.start_date > b.start_date ? -1 : 1));
+    userReminders = [...(store.reminders || [])]
+      .filter(r => Number(r.user_id) === Number(userId))
+      .sort((a, b) => (a.time_of_day > b.time_of_day ? 1 : -1));
+    userLogs = [...(store.daily_logs || [])]
+      .filter(l => Number(l.user_id) === Number(userId))
+      .sort((a, b) => (a.date > b.date ? -1 : 1));
   }
-};
 
-// Unified Instant Bootstrap Data Aggregator (< 1ms execution)
-export function getBootstrapData(userId = 1) {
-  const store = loadMemoryStore();
-  const user = store.users.find(u => Number(u.id) === Number(userId)) || store.users[0];
-
-  const userCycles = [...(store.cycles || [])]
-    .filter(c => Number(c.user_id) === Number(userId))
-    .sort((a, b) => (a.start_date > b.start_date ? -1 : 1));
+  function tryParseJson(val) {
+    try { return JSON.parse(val); } catch (e) { return null; }
+  }
 
   const sortedAscCycles = [...userCycles].sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
   const todayStr = new Date().toISOString().split('T')[0];
   const predictions = computePredictions(sortedAscCycles, todayStr);
-
-  const userReminders = [...(store.reminders || [])]
-    .filter(r => Number(r.user_id) === Number(userId))
-    .sort((a, b) => (a.time_of_day > b.time_of_day ? 1 : -1));
 
   const currentPhase = predictions.currentPhase.toLowerCase();
   const dueReminders = userReminders.filter(r => {
@@ -451,10 +500,6 @@ export function getBootstrapData(userId = 1) {
     }
     return true;
   });
-
-  const userLogs = [...(store.daily_logs || [])]
-    .filter(l => Number(l.user_id) === Number(userId))
-    .sort((a, b) => (a.date > b.date ? -1 : 1));
 
   const todayLog = userLogs.find(l => l.date === todayStr);
 
@@ -576,8 +621,12 @@ export function getBootstrapData(userId = 1) {
 }
 
 export const initDb = async () => {
-  loadMemoryStore();
-  console.log('🌸 Bloom High-Performance Database Engine ready (Instant in-memory + JSON store)');
+  if (isRealSupabaseConfigured) {
+    console.log('⚡ Bloom Database Engine: Connected to real Supabase database');
+  } else {
+    loadMemoryStore();
+    console.log('🌸 Bloom Database Engine: Running in local store mode');
+  }
 };
 
 export default supabase;
