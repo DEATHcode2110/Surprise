@@ -4,7 +4,7 @@ import api from '../api/client';
 const TrackerContext = createContext(null);
 
 const PERMANENT_PASSWORD = '0106';
-const CACHE_STORAGE_KEY = 'BLOOM_TRACKER_CACHE_V2';
+const CACHE_STORAGE_KEY = 'BLOOM_TRACKER_CACHE_V3';
 
 // Helper to safely load cached data synchronously on startup
 function getStoredCache() {
@@ -27,78 +27,49 @@ function persistCache(data) {
   }
 }
 
-// Helper to generate seed fallback data if backend is offline and no cache exists
+// Helper to generate clean default data if backend is offline and no cache exists
 function getFallbackSeedData() {
-  const now = new Date();
-  const makeDate = (daysAgo) => {
-    const d = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  };
-
-  const seedCycles = [
-    { id: 1, user_id: 1, start_date: makeDate(112), end_date: makeDate(107), flow_intensity: { [makeDate(112)]: 'heavy' }, notes: 'Regular flow' },
-    { id: 2, user_id: 1, start_date: makeDate(84), end_date: makeDate(79), flow_intensity: { [makeDate(84)]: 'heavy' }, notes: 'Smooth cycle' },
-    { id: 3, user_id: 1, start_date: makeDate(56), end_date: makeDate(51), flow_intensity: { [makeDate(56)]: 'heavy' }, notes: 'On time' },
-    { id: 4, user_id: 1, start_date: makeDate(28), end_date: makeDate(23), flow_intensity: { [makeDate(28)]: 'heavy' }, notes: 'Very consistent' }
-  ];
-
-  const todayStr = makeDate(0);
-  const nextStart = makeDate(-28);
+  const todayStr = new Date().toISOString().split('T')[0];
 
   return {
-    cycles: seedCycles,
-    dueReminders: [
-      { id: 1, label: 'Drink warm hydration water & herbal chamomile tea', time_of_day: '09:00', is_active: true }
-    ],
-    reminders: [
-      { id: 1, label: 'Drink warm hydration water & herbal chamomile tea', time_of_day: '09:00', is_active: true },
-      { id: 2, label: 'Check in on comfort, soothing snacks & sweet treats', time_of_day: '17:30', is_active: true },
-      { id: 3, label: 'Prepare heating pad & gentle back massage', time_of_day: '08:30', is_active: true }
-    ],
+    cycles: [],
+    dueReminders: [],
+    reminders: [],
     profile: {
-      partnerName: 'My Girlfriend',
-      userName: 'Partner',
-      details: {
-        favoriteSnacks: 'Dark chocolate, strawberries, gummies',
-        favoriteDrinks: 'Chamomile tea, warm ginger tea',
-        careNotes: 'Heating pad on lower tummy for cramps'
-      }
+      partnerName: 'Partner',
+      userName: 'User',
+      details: {}
     },
     insights: {
       averages: { last3Months: 28, last6Months: 28, last12Months: 28 },
-      cycleTrends: seedCycles.map((c, i) => ({ cycleIndex: i + 1, startDate: c.start_date, lengthDays: 28, periodDuration: 5 })),
-      topSymptoms: [{ name: 'cramps', count: 2 }, { name: 'fatigue', count: 1 }],
-      topMoods: [{ name: 'happy', count: 3 }],
+      cycleTrends: [],
+      topSymptoms: [],
+      topMoods: [],
       predictions: {
         currentPhase: 'Follicular',
         daysUntilNextPeriod: 28,
-        predictedNextStart: nextStart,
-        predictedNextEnd: makeDate(-33),
+        predictedNextStart: todayStr,
+        predictedNextEnd: todayStr,
         confidenceLevel: 'High',
-        confidenceScore: 92,
-        confidenceMessage: 'High accuracy based on 4 consistent cycles',
+        confidenceScore: 90,
+        confidenceMessage: 'Ready for tracking',
         averageCycleLength: 28,
         averagePeriodDuration: 5,
-        cycleCount: 4
+        cycleCount: 0
       }
     },
     partnerView: {
-      partnerName: 'My Girlfriend',
+      partnerName: 'Partner',
       todayDate: todayStr,
       currentPhase: 'Follicular',
       daysUntilNextPeriod: 28,
-      predictedNextPeriodStart: nextStart,
+      predictedNextPeriodStart: todayStr,
       isPmsActive: false,
       isMenstrualActive: false,
-      todayLogged: { symptoms: [], moods: ['happy'], notes: 'Feeling good! 🌸' },
-      partnerGuidance: ['Great day for an outdoor walk or date night!', 'Energy levels are high and positive']
+      todayLogged: { symptoms: [], moods: [], notes: '' },
+      partnerGuidance: ['Check in and share a cute note']
     },
-    dailyLogs: [
-      { id: 1, user_id: 1, date: todayStr, symptoms: [], mood_tags: ['happy'], notes: 'Feeling good! 🌸' }
-    ]
+    dailyLogs: []
   };
 }
 
@@ -170,14 +141,14 @@ export function TrackerProvider({ children }) {
         return null;
       });
 
-      if (data && (data.insights || (data.cycles && data.cycles.length > 0))) {
-        if (data.cycles) setCycles(data.cycles);
+      if (data && typeof data === 'object' && !data.error) {
+        setCycles(data.cycles || []);
         if (data.insights) setInsightsData(data.insights);
-        if (data.dueReminders) setDueReminders(data.dueReminders);
-        if (data.reminders) setReminders(data.reminders);
-        if (data.profile) setProfile(data.profile);
-        if (data.partnerView) setPartnerView(data.partnerView);
-        if (data.dailyLogs) setDailyLogs(data.dailyLogs);
+        setDueReminders(data.dueReminders || []);
+        setReminders(data.reminders || []);
+        setProfile(data.profile || null);
+        setPartnerView(data.partnerView || null);
+        setDailyLogs(data.dailyLogs || []);
 
         // Update persistent localStorage cache
         persistCache({
@@ -192,8 +163,7 @@ export function TrackerProvider({ children }) {
 
         setError(null);
       } else {
-        // Backend was unreachable or returned empty dataset
-        // If state or initialCache is empty, populate fallback seed data
+        // Backend was unreachable or errored out
         const fallback = getFallbackSeedData();
         setCycles(prev => prev.length > 0 ? prev : fallback.cycles);
         setInsightsData(prev => prev || fallback.insights);
@@ -203,7 +173,6 @@ export function TrackerProvider({ children }) {
         setPartnerView(prev => prev || fallback.partnerView);
         setDailyLogs(prev => prev.length > 0 ? prev : fallback.dailyLogs);
 
-        persistCache(fallback);
         setError(null);
       }
     } catch (err) {
