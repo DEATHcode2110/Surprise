@@ -211,13 +211,15 @@ export function TrackerProvider({ children }) {
     setIsLocked(true);
   };
 
-  // Optimistic helper for saving a daily log with instant UI response
+  // Optimistic helper for saving a daily log with instant UI response & localStorage persistence
   const saveDailyLog = useCallback(async (logData) => {
-    // Optimistically update local state immediately
+    let nextLogs;
     setDailyLogs(prev => {
       const filtered = prev.filter(l => l.date !== logData.date);
-      const next = [logData, ...filtered];
-      return next;
+      nextLogs = [logData, ...filtered];
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, dailyLogs: nextLogs });
+      return nextLogs;
     });
 
     try {
@@ -225,8 +227,8 @@ export function TrackerProvider({ children }) {
       refreshAllData();
       return res;
     } catch (err) {
-      refreshAllData();
-      throw err;
+      console.warn('Network save notice (daily log saved locally):', err.message);
+      return { success: true, log: logData, local: true };
     }
   }, [refreshAllData]);
 
@@ -242,41 +244,115 @@ export function TrackerProvider({ children }) {
       notes: cycleData.notes || ''
     };
 
-    setCycles(prev => [tempCycle, ...prev]);
+    setCycles(prev => {
+      const next = [tempCycle, ...prev];
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, cycles: next });
+      return next;
+    });
 
     try {
       const res = await api.createCycle(cycleData);
       await refreshAllData();
       return res;
     } catch (err) {
-      await refreshAllData();
-      throw err;
+      console.warn('Network cycle create notice (saved locally):', err.message);
+      return { success: true, cycle: tempCycle, local: true };
     }
   }, [refreshAllData]);
 
   // Optimistic helper for deleting a cycle
   const deleteCycle = useCallback(async (id) => {
-    setCycles(prev => prev.filter(c => c.id !== id));
+    setCycles(prev => {
+      const next = prev.filter(c => c.id !== id);
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, cycles: next });
+      return next;
+    });
     try {
       const res = await api.deleteCycle(id);
       await refreshAllData();
       return res;
     } catch (err) {
-      await refreshAllData();
-      throw err;
+      console.warn('Network cycle delete notice (removed locally):', err.message);
+      return { success: true, local: true };
     }
   }, [refreshAllData]);
 
   // Optimistic helper for updating profile
   const updateProfile = useCallback(async (profileData) => {
-    setProfile(prev => ({ ...prev, ...profileData }));
+    setProfile(prev => {
+      const next = { ...prev, ...profileData };
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, profile: next });
+      return next;
+    });
     try {
       const res = await api.updateProfile(profileData);
       await refreshAllData();
       return res;
     } catch (err) {
+      console.warn('Network profile update notice (saved locally):', err.message);
+      return { success: true, profile: profileData, local: true };
+    }
+  }, [refreshAllData]);
+
+  // Reminder mutation helpers
+  const createReminder = useCallback(async (reminderData) => {
+    const tempReminder = {
+      id: Date.now(),
+      user_id: 1,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      ...reminderData
+    };
+    setReminders(prev => {
+      const next = [...prev, tempReminder];
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, reminders: next });
+      return next;
+    });
+    try {
+      const res = await api.createReminder(reminderData);
       await refreshAllData();
-      throw err;
+      return res;
+    } catch (err) {
+      console.warn('Network reminder create notice (saved locally):', err.message);
+      return { success: true, reminder: tempReminder, local: true };
+    }
+  }, [refreshAllData]);
+
+  const updateReminder = useCallback(async (id, updateData) => {
+    setReminders(prev => {
+      const next = prev.map(r => r.id === id ? { ...r, ...updateData } : r);
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, reminders: next });
+      return next;
+    });
+    try {
+      const res = await api.updateReminder(id, updateData);
+      await refreshAllData();
+      return res;
+    } catch (err) {
+      console.warn('Network reminder update notice (saved locally):', err.message);
+      return { success: true, local: true };
+    }
+  }, [refreshAllData]);
+
+  const deleteReminder = useCallback(async (id) => {
+    setReminders(prev => {
+      const next = prev.filter(r => r.id !== id);
+      const cache = getStoredCache() || {};
+      persistCache({ ...cache, reminders: next });
+      return next;
+    });
+    try {
+      const res = await api.deleteReminder(id);
+      await refreshAllData();
+      return res;
+    } catch (err) {
+      console.warn('Network reminder delete notice (removed locally):', err.message);
+      return { success: true, local: true };
     }
   }, [refreshAllData]);
 
@@ -315,6 +391,9 @@ export function TrackerProvider({ children }) {
     createCycle,
     deleteCycle,
     updateProfile,
+    createReminder,
+    updateReminder,
+    deleteReminder,
 
     setCycles,
     setReminders,

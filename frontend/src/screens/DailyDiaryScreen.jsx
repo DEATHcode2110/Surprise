@@ -1,20 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import api from '../api/client';
 import { useTracker } from '../context/TrackerContext';
 
 export default function DailyDiaryScreen() {
   const { dailyLogs, dailyLogsMap, saveDailyLog: saveDailyLogInContext, refreshAllData } = useTracker();
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [diaryEntry, setDiaryEntry] = useState('');
   const [hasExistingLog, setHasExistingLog] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
   // Compute recent entries from cached dailyLogs (0ms instant lookup)
-  const recentEntries = (dailyLogs || []).filter(
-    l => l.notes && l.notes.trim().length > 0
-  );
+  const recentEntries = useMemo(() => {
+    return (dailyLogs || []).filter(
+      l => l && l.notes && l.notes.trim().length > 0
+    );
+  }, [dailyLogs]);
 
   // Synchronously load diary entry from local cache when date changes (0ms delay)
   useEffect(() => {
@@ -24,13 +25,11 @@ export default function DailyDiaryScreen() {
     if (hasNotes) {
       setDiaryEntry(logObj.notes);
       setHasExistingLog(true);
-      setIsEditing(false);
     } else {
       setDiaryEntry('');
       setHasExistingLog(false);
-      setIsEditing(true);
     }
-  }, [selectedDate, dailyLogsMap]);
+  }, [selectedDate]); // NOTE: Intentionally depends ONLY on selectedDate to avoid wiping while typing!
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -55,11 +54,11 @@ export default function DailyDiaryScreen() {
       }
 
       setMessage({ type: 'success', text: 'Diary entry saved successfully! 📖💖' });
-      setHasExistingLog(true);
-      setIsEditing(false);
-      await refreshAllData();
+      setHasExistingLog(Boolean(diaryEntry.trim().length > 0));
+      if (refreshAllData) refreshAllData();
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      console.error('Save diary entry error:', err);
+      setMessage({ type: 'error', text: err.message || 'Failed to save entry' });
     } finally {
       setSaving(false);
     }
@@ -85,7 +84,7 @@ export default function DailyDiaryScreen() {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-1.5 rounded-2xl bg-surface-bright border border-primary-container/50 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-xs"
+              className="px-3 py-1.5 rounded-2xl bg-surface-bright border border-primary-container/50 text-xs font-bold text-primary focus:outline-none focus:ring-2 focus:ring-primary/40 shadow-xs cursor-pointer"
             />
           </div>
         </div>
@@ -99,67 +98,48 @@ export default function DailyDiaryScreen() {
         </div>
       )}
 
-      {/* Main Diary Entry Card */}
-      <div className="glass-card rounded-4xl p-6 border border-primary-container/40">
-        {hasExistingLog && !isEditing ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-primary-container/30 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">book_4</span>
-                <h3 className="font-bold text-sm text-primary">Entry for {selectedDate}</h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="px-4 py-1.5 rounded-2xl bg-primary text-on-primary font-bold text-xs hover:bg-primary/90 transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-sm">edit</span>
-                Edit Entry
-              </button>
-            </div>
-
-            <div className="p-5 rounded-3xl bg-surface-container-low/80 border border-primary-container/30 text-xs font-medium text-on-surface leading-relaxed whitespace-pre-wrap min-h-[160px]">
-              {diaryEntry}
-            </div>
+      {/* Main Diary Entry Card - Always Editable & Responsive */}
+      <div className="glass-card rounded-4xl p-6 border border-primary-container/40 space-y-4">
+        <div className="flex items-center justify-between border-b border-primary-container/20 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary text-xl">book_4</span>
+            <h3 className="font-bold text-sm text-primary">Journal Entry for {selectedDate}</h3>
           </div>
-        ) : (
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold text-primary flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-sm">edit_note</span>
-                Write Your Journal Entry ({selectedDate})
-              </label>
-              {hasExistingLog && (
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className="text-xs font-bold text-outline hover:text-on-surface cursor-pointer"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
+          {hasExistingLog && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold shadow-xs">
+              <span className="material-symbols-outlined text-sm text-emerald-700">check_circle</span>
+              Saved
+            </span>
+          )}
+        </div>
 
-            <textarea
-              rows={8}
-              value={diaryEntry}
-              onChange={(e) => setDiaryEntry(e.target.value)}
-              placeholder="Dear Diary, today was..."
-              className="w-full p-4 rounded-3xl bg-surface-container-low border border-primary-container/40 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none leading-relaxed"
-            />
-
-            <div className="flex justify-end gap-2">
-              <button
-                type="submit"
-                disabled={saving || !diaryEntry.trim()}
-                className="px-6 py-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-on-primary rounded-2xl font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-base">save</span>
-                {saving ? 'Saving Entry...' : 'Save Journal Entry'}
-              </button>
-            </div>
-          </form>
+        {hasExistingLog && (
+          <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-800 flex items-center gap-2">
+            <span className="material-symbols-outlined text-sm text-emerald-600">verified</span>
+            <span>Saved journal entry exists for this date. You can add more or modify it anytime below!</span>
+          </div>
         )}
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <textarea
+            rows={8}
+            value={diaryEntry}
+            onChange={(e) => setDiaryEntry(e.target.value)}
+            placeholder="Dear Diary, today was..."
+            className="w-full p-4 rounded-3xl bg-surface-container-low border border-primary-container/40 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none leading-relaxed shadow-inner"
+          />
+
+          <div className="flex justify-end gap-2">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-6 py-3 bg-primary hover:bg-primary/90 text-on-primary rounded-2xl font-bold font-headline text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-base">save</span>
+              {saving ? 'Saving Entry...' : hasExistingLog ? 'Update Journal Entry 📖💖' : 'Save Journal Entry 📖💖'}
+            </button>
+          </div>
+        </form>
       </div>
 
       {/* Past Diary Entries List */}

@@ -83,13 +83,15 @@ router.get('/:date', authenticateToken, async (req, res) => {
 // POST /api/daily-logs (upsert log for date)
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { date, symptoms, mood_tags, notes } = req.body;
+    const date = req.body.date || req.body.log_date;
+    const { symptoms, mood_tags, moods, notes } = req.body;
     if (!date) {
       return res.status(400).json({ error: 'date is required (YYYY-MM-DD)' });
     }
 
+    const rawMoods = mood_tags !== undefined ? mood_tags : moods;
     const symptomsArr = Array.isArray(symptoms) ? symptoms : parseArrayIfNeeded(symptoms);
-    const moodArr = Array.isArray(mood_tags) ? mood_tags : parseArrayIfNeeded(mood_tags);
+    const moodArr = Array.isArray(rawMoods) ? rawMoods : parseArrayIfNeeded(rawMoods);
     const noteStr = notes || '';
 
     const { data: updated, error } = await supabase

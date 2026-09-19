@@ -3,7 +3,14 @@ import api from '../api/client';
 import { useTracker } from '../context/TrackerContext';
 
 export default function RemindersScreen() {
-  const { reminders, setReminders, refreshAllData, isInitialLoading } = useTracker();
+  const {
+    reminders,
+    createReminder,
+    updateReminder,
+    deleteReminder,
+    refreshAllData,
+    isInitialLoading
+  } = useTracker();
   const [triggerStatus, setTriggerStatus] = useState(null);
 
   // Form state for creating reminder
@@ -16,48 +23,57 @@ export default function RemindersScreen() {
 
   const handleToggle = async (reminder) => {
     const nextState = !reminder.is_active;
-    setReminders(prev => prev.map(r => r.id === reminder.id ? { ...r, is_active: nextState } : r));
     try {
-      await api.updateReminder(reminder.id, {
-        is_active: nextState
-      });
-      refreshAllData();
+      if (updateReminder) {
+        await updateReminder(reminder.id, { is_active: nextState });
+      } else {
+        await api.updateReminder(reminder.id, { is_active: nextState });
+        refreshAllData();
+      }
     } catch (err) {
-      setReminders(prev => prev.map(r => r.id === reminder.id ? { ...r, is_active: !nextState } : r));
-      alert(err.message);
+      console.warn('Error toggling reminder:', err);
     }
   };
 
   const handleDelete = async (id) => {
     if (!confirm('Are you sure you want to delete this reminder?')) return;
-    const previous = reminders;
-    setReminders(prev => prev.filter(r => r.id !== id));
     try {
-      await api.deleteReminder(id);
-      refreshAllData();
+      if (deleteReminder) {
+        await deleteReminder(id);
+      } else {
+        await api.deleteReminder(id);
+        refreshAllData();
+      }
     } catch (err) {
-      setReminders(previous);
-      alert(err.message);
+      console.warn('Error deleting reminder:', err);
     }
   };
 
   const handleCreate = async (e) => {
     e.preventDefault();
+    if (!label.trim()) return;
     try {
       setSubmitting(true);
-      await api.createReminder({
-        label,
+      const payload = {
+        label: label.trim(),
         recurrence_rule: recurrenceRule,
         phase_trigger: recurrenceRule === 'tied_to_cycle_phase' ? phaseTrigger : 'all',
         time_of_day: timeOfDay,
         is_active: true
-      });
+      };
+
+      if (createReminder) {
+        await createReminder(payload);
+      } else {
+        await api.createReminder(payload);
+        await refreshAllData();
+      }
 
       setLabel('');
       setShowModal(false);
-      await refreshAllData();
     } catch (err) {
-      alert(err.message);
+      console.error('Error creating reminder:', err);
+      alert(err.message || 'Could not save reminder');
     } finally {
       setSubmitting(false);
     }

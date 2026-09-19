@@ -419,14 +419,56 @@ class LocalQueryBuilder {
   }
 }
 
-// Supabase Client: Uses real Supabase client when configured, otherwise falls back to local query builder
-export const supabase = isRealSupabaseConfigured
+// Real Supabase Client instance (if configured)
+const realSupabase = isRealSupabaseConfigured
   ? createClient(supabaseUrl, supabaseKey)
-  : {
-    from(tableName) {
+  : null;
+
+// Resilient Supabase client with transparent local store fallback
+export const supabase = {
+  from(tableName) {
+    if (!realSupabase) {
       return new LocalQueryBuilder(tableName);
     }
-  };
+
+    const query = realSupabase.from(tableName);
+    const wrapBuilder = (target) => {
+      return new Proxy(target, {
+        get(t, prop, receiver) {
+          const orig = Reflect.get(t, prop, receiver);
+          if (prop === 'then') {
+            return function (onFulfilled, onRejected) {
+              return orig.call(t).then(
+                (result) => {
+                  if (result.error && (result.error.message?.includes('fetch failed') || result.status >= 500)) {
+                    console.warn(`[Supabase Error] Falling back to local store for ${tableName}:`, result.error.message);
+                    return new LocalQueryBuilder(tableName).exec().then(onFulfilled, onRejected);
+                  }
+                  return onFulfilled ? onFulfilled(result) : result;
+                },
+                (err) => {
+                  console.warn(`[Supabase Error] Network failure, falling back to local store for ${tableName}:`, err.message);
+                  return new LocalQueryBuilder(tableName).exec().then(onFulfilled, onRejected);
+                }
+              );
+            };
+          }
+          if (typeof orig === 'function') {
+            return function (...args) {
+              const res = orig.apply(t, args);
+              if (res && typeof res === 'object' && typeof res.then === 'function') {
+                return wrapBuilder(res);
+              }
+              return res;
+            };
+          }
+          return orig;
+        }
+      });
+    };
+    return wrapBuilder(query);
+  }
+};
 
 // Unified Instant Bootstrap Data Aggregator (< 1ms local / single roundtrip Supabase)
 export async function getBootstrapData(userId = 1) {
@@ -622,10 +664,19 @@ export async function getBootstrapData(userId = 1) {
 }
 
 export const initDb = async () => {
-  if (isRealSupabaseConfigured) {
-    console.log('⚡ Bloom Database Engine: Connected to real Supabase database');
+  loadMemoryStore();
+  if (isRealSupabaseConfigured && realSupabase) {
+    try {
+      const ping = await Promise.race([
+        realSupabase.from('users').select('id').limit(1),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Supabase timeout')), 3500))
+      ]);
+      if (ping.error) throw ping.error;
+      console.log('⚡ Bloom Database Engine: Connected to active Supabase database');
+    } catch (err) {
+      console.warn('⚠️ Bloom Database Engine: Notice during Supabase check (' + err.message + '). Active local store fallback ready.');
+    }
   } else {
-    loadMemoryStore();
     console.log('🌸 Bloom Database Engine: Running in local store mode');
   }
 };
